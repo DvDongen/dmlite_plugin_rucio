@@ -1,0 +1,22 @@
+DESCRIPTION
+
+  The Rucio plugin for DMLite.
+
+CONTACT
+
+
+AUTHORS
+
+  Mario Lassnig
+
+BUILD
+
+Out of source build, that's it.
+
+# mkdir build
+# cmake ..
+# make
+# make install DESTDIR=<whatever>
+
+One detail... jansson is currently not available in EL5/6, so you need to install it somehow
+from outsite EPEL.

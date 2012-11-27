@@ -1,0 +1,8 @@
+# Uncomment to enable the rucio plugin
+LoadPlugin plugin_rucio /usr/lib@LIB_SUFFIX@/dmlite/plugin_rucio.so
+
+# Rucio hostname
+RucioHost hostname
+
+# AuthToken to use to connection the to Rucio server
+RucioAuthToken token

@@ -26,7 +26,7 @@ typedef struct  {
   std::string rse;
   std::string pfn;
   std::string checksum;
-  uint64_t size;
+  int size;
 } replica_t;
 
 class RucioConnect {
