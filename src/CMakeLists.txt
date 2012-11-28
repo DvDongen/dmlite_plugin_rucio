@@ -5,7 +5,7 @@ add_library (rucio MODULE plugin_rucio.cc
                           rucio_connect.cc
             )
 
-target_link_libraries (rucio ${DMLITE_LIBRARIES})
+target_link_libraries (rucio ${DMLITE_LIBRARIES} curl jansson)
 set_target_properties (rucio PROPERTIES PREFIX "plugin_")
 
 install (TARGETS rucio
