@@ -2,21 +2,44 @@ DESCRIPTION
 
   The Rucio plugin for DMLite.
 
+
 CONTACT
+
+  ATLAS Distributed Data Management <ph-adp-ddm-lab@cern.ch>
 
 
 AUTHORS
 
-  Mario Lassnig
+  Mario Lassnig <mario.lassnig@cern.ch>
+
 
 BUILD
 
-Out of source build, that's it.
+  $ mkdir build
+  $ cmake ..
+  $ make
+  $ make install DESTDIR=<target>
 
-# mkdir build
-# cmake ..
-# make
-# make install DESTDIR=<whatever>
 
-One detail... jansson is currently not available in EL5/6, so you need to install it somehow
-from outsite EPEL.
+DEPENDENCIES
+
+  cmake >= 2.6
+  dmlite >= 1.6
+  boost >= 1.41
+  libcurl >= 7.19.7
+  jansson >= 2.4
+
+
+CAVEAT
+
+  - Tested only only on SLC6 (RHEL6).
+  - jansson is not yet available from EPEL and must be installed manually.
+
+
+LICENCE
+
+  Copyright European Organization for Nuclear Research (CERN)
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  You may not use these files except in compliance with the License.
+  You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0

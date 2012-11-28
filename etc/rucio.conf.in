@@ -1,8 +1,8 @@
 # Uncomment to enable the rucio plugin
-LoadPlugin plugin_rucio /usr/lib@LIB_SUFFIX@/dmlite/plugin_rucio.so
+#LoadPlugin plugin_rucio /usr/lib@LIB_SUFFIX@/dmlite/plugin_rucio.so
 
-# Rucio hostname
+# Rucio server hostname (FQAN). Will be accessed via https:443
 RucioHost hostname
 
-# AuthToken to use to connection the to Rucio server
+# Token to authenticate with the rucio server (32 ASCII characters)
 RucioAuthToken token

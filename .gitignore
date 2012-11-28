@@ -1,3 +1,1 @@
-*.o
-plugin_rucio.so
-test
+build/

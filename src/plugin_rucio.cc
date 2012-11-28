@@ -1,3 +1,13 @@
+/**
+ * Copyright European Organization for Nuclear Research (CERN)
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Authors:
+ * - Mario Lassnig, <mario.lassnig@cern.ch>, 2012
+ */
+
 #include <iostream>
 #include <string>
 
@@ -10,9 +20,9 @@
 namespace Rucio {
 
 RucioFactory::RucioFactory(dmlite::CatalogFactory *next) : next(next) {
-  host = "atlas-rucio.cern.ch";
-  auth_host = "atlas-rucio-auth.cern.ch";
-  auth_method = "userpass";
+  host = "fallback-hostname.com";
+  auth_host = "fallback-hostname.com";
+  auth_method = "userpass"; // one of 'userpass', 'x509', 'x509_proxy', 'gss'
 }
 
 RucioFactory::~RucioFactory() {

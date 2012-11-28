@@ -1,3 +1,13 @@
+/**
+ * Copyright European Organization for Nuclear Research (CERN)
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Authors:
+ * - Mario Lassnig, <mario.lassnig@cern.ch>, 2012
+ */
+
 #ifndef PLUGIN_RUCIO_H
 #define PLUGIN_RUCIO_H
 
@@ -13,11 +23,9 @@ class RucioFactory : public dmlite::CatalogFactory {
     RucioFactory(dmlite::CatalogFactory *next);
     ~RucioFactory();
 
-    void configure(const std::string& key,
-                   const std::string& value) throw (dmlite::DmException);
+    void configure(const std::string& key, const std::string& value) throw (dmlite::DmException);
 
-    dmlite::Catalog *createCatalog(dmlite::PluginManager *pm) throw (dmlite::
-                                                                     DmException);
+    dmlite::Catalog *createCatalog(dmlite::PluginManager *pm) throw (dmlite::DmException);
 
   private:
     std::string auth_host;
