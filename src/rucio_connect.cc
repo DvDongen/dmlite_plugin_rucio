@@ -35,7 +35,7 @@ size_t write_fp(void *ptr, size_t size, size_t nmemb, void *stream) {
 
 namespace Rucio {
 
-RucioConnect::RucioConnect(std::string host, std::string auth_token) {
+RucioConnect::RucioConnect(std::string host, std::string auth_token, std::string ca_cert) {
 
   full_host = "https://" + host + ":443";
   full_auth = std::string("Rucio-Auth-Token: ") + auth_token;
@@ -48,7 +48,7 @@ RucioConnect::RucioConnect(std::string host, std::string auth_token) {
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_fp);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &chunk);
   curl_easy_setopt(curl, CURLOPT_USERAGENT, "plugin_rucio/0.1");
-  curl_easy_setopt(curl, CURLOPT_CAINFO, "/opt/rucio/etc/web/ca.crt");
+  curl_easy_setopt(curl, CURLOPT_CAINFO, ca_cert.c_str());
 
   headers = curl_slist_append(headers, full_auth.c_str());
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);

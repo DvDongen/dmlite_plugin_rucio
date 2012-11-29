@@ -36,7 +36,7 @@ class RucioDID : public dmlite::Directory {
 
 class RucioCatalog : public dmlite::DummyCatalog {
   public:
-    RucioCatalog(dmlite::Catalog *next, std::string host, std::string auth_token) throw (dmlite::DmException);
+    RucioCatalog(dmlite::Catalog *next, std::string host, std::string auth_token, std::string ca_cert) throw (dmlite::DmException);
     ~RucioCatalog();
 
     std::string getImplId() const throw ();

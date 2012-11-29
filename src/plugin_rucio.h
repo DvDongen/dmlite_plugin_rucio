@@ -32,6 +32,7 @@ class RucioFactory : public dmlite::CatalogFactory {
     std::string auth_method;
     std::string auth_token;
     std::string host;
+    std::string ca_cert;
     dmlite::CatalogFactory *next;
 };
 }

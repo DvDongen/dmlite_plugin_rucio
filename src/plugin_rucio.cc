@@ -8,6 +8,7 @@
  * - Mario Lassnig, <mario.lassnig@cern.ch>, 2012
  */
 
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -23,6 +24,7 @@ RucioFactory::RucioFactory(dmlite::CatalogFactory *next) : next(next) {
   host = "fallback-hostname.com";
   auth_host = "fallback-hostname.com";
   auth_method = "userpass"; // one of 'userpass', 'x509', 'x509_proxy', 'gss'
+  ca_cert = "/opt/rucio/etc/web/ca.crt";
 }
 
 RucioFactory::~RucioFactory() {
@@ -39,13 +41,24 @@ void RucioFactory::configure(const std::string& key, const std::string& value) t
     this->host = value;
   } else if (key == "RucioAuthToken") {
     this->auth_token = value;
+  } else if (key == "RucioCACert") {
+    this->ca_cert = value;
   } else {
     throw dmlite::DmException(DMLITE_CFGERR(DMLITE_UNKNOWN_KEY), "unknown key: " + key);
   }
 }
 
 dmlite::Catalog *RucioFactory::createCatalog(dmlite::PluginManager *pm) throw (dmlite::DmException) {
-  return new RucioCatalog(dmlite::CatalogFactory::createCatalog(next, pm), host, auth_token);
+
+  // Check that we can actually access the CA certificate, otherwise CURL will fail later in the process.
+  std::ifstream ca_file(ca_cert.c_str(), std::ifstream::in);
+  if (!ca_file.good()) {
+    ca_file.close();
+    throw dmlite::DmException(DMLITE_CFGERR(EINVAL), "cannot open CA certificate: " + ca_cert);
+  }
+  ca_file.close();
+
+  return new RucioCatalog(dmlite::CatalogFactory::createCatalog(next, pm), host, auth_token, ca_cert);
 }
 }
 

@@ -31,13 +31,13 @@ RucioDID::~RucioDID() {
   std::cerr << "[RUCIO][DID][DTOR]" << std::endl;
 }
 
-RucioCatalog::RucioCatalog(dmlite::Catalog *next, std::string host, std::string auth_token) throw (dmlite::DmException) :
+RucioCatalog::RucioCatalog(dmlite::Catalog *next, std::string host, std::string auth_token, std::string ca_cert) throw (dmlite::DmException) :
   dmlite::DummyCatalog(next) {
   std::cerr << "[RUCIO][CATALOG][CTOR] " << next->getImplId() << std::endl;
 
   cwd = "/";
 
-  rc = new RucioConnect(host, auth_token);
+  rc = new RucioConnect(host, auth_token, ca_cert);
 }
 
 RucioCatalog::~RucioCatalog() {

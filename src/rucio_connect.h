@@ -42,7 +42,7 @@ typedef struct  {
 class RucioConnect {
 
   public:
-    RucioConnect(std::string host, std::string auth_token);
+    RucioConnect(std::string host, std::string auth_token, std::string ca_cert);
     ~RucioConnect();
 
     std::deque<std::string> list_scopes();

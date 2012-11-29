@@ -6,3 +6,6 @@ RucioHost hostname
 
 # Token to authenticate with the rucio server (32 ASCII characters)
 RucioAuthToken token
+
+# Location of the CA certification to verify Rucio server
+RucioCACert /opt/rucio/etc/web/ca.crt
