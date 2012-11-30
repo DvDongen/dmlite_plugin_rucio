@@ -51,6 +51,8 @@ class RucioConnect {
 
     std::deque<replica_t> list_replicas(std::string scope, std::string did);
 
+    did_t get_did(std::string scope, std::string did);
+
   private:
     struct curl_slist *headers;
 

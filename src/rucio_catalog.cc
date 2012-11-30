@@ -23,8 +23,20 @@ namespace Rucio {
 
 RucioDID::RucioDID(std::string path) : dmlite::Directory() {
   std::cerr << "[RUCIO][DID][CTOR]" << std::endl;
+
   this->path = path;
   ptr = 0;
+
+  stat.guid = "0";
+  stat.csumtype = "ad";
+  stat.csumvalue = "00000000";
+  stat.stat.st_mode = S_IFDIR;
+  stat.stat.st_uid = 0;
+  stat.stat.st_gid = 0;
+  stat.stat.st_size = 0;
+  stat.stat.st_atime = 0;
+  stat.stat.st_mtime = 0;
+  stat.stat.st_ctime = 0;
 }
 
 RucioDID::~RucioDID() {
@@ -55,7 +67,27 @@ void RucioCatalog::addReplica(const dmlite::Replica& replica) throw (dmlite::DmE
 
 void RucioCatalog::changeDir(const std::string& path) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][CHANGEDIR]" << std::endl;
-  cwd = path;
+
+  if (path == "~") { // Home is root
+    cwd = "/";
+  } else if (path == ".") { // Nothing to do
+    return;
+  } else if (path == "..") { // Go back up one,
+    if (cwd == "/") { // unless we're already at root
+      return;
+    }
+    cwd = cwd.substr(0, cwd.rfind("/"));
+  } else { // Change to the given directory
+    if (path.at(0) == '/') { // Is it a full path?
+      cwd = path;
+    } else { // or relative?
+      if (cwd == "/") {
+        cwd = cwd + path;
+      } else {
+        cwd = cwd + "/" + path;
+      }
+    }
+  }
 }
 
 void RucioCatalog::closeDir(dmlite::Directory *dir) throw (dmlite::DmException) {
@@ -71,20 +103,13 @@ void RucioCatalog::create(const std::string& path, mode_t mode) throw (dmlite::D
 
 dmlite::ExtendedStat RucioCatalog::extendedStat(const std::string& path, bool followSym) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][EXTENDEDSTAT]" << std::endl;
-  dmlite::ExtendedStat e_stat;
-  e_stat.parent = (ino_t)0;
-  // e_stat.stat = 0;
-  // e_stat.status = FileStatus.kOnline;
-  e_stat.name = "filename";
-  e_stat.guid = "a82b801a-1cf5-11e2-96f7-003048f164d6";
-  e_stat.csumtype = "adler32";
-  e_stat.csumvalue = "11e60398";
-  return e_stat;
+  dmlite::ExtendedStat dummy;
+  return dummy;
 }
 
 std::string RucioCatalog::getComment(const std::string& path) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][GETCOMMENT]" << std::endl;
-  return "dummy_comment";
+  return std::string();
 }
 
 dmlite::Replica RucioCatalog::getReplica(const std::string *rfn) throw (dmlite::DmException) {
@@ -178,9 +203,13 @@ dmlite::ExtendedStat *RucioCatalog::readDirx(dmlite::Directory *dir) throw (dmli
   }
 
   if (did_r->path == "/") {
-    did_r->stat.name = "/" + did_r->scopes.at(did_r->ptr);
+    did_r->stat.name = did_r->scopes.at(did_r->ptr);
   } else {
-    did_r->stat.name = "/" + did_r->scopes.at(did_r->ptr) + "/" + did_r->dids.at(did_r->ptr);
+    // did_r->stat.name = "/" + did_r->scopes.at(did_r->ptr) + "/" + did_r->dids.at(did_r->ptr);
+    did_r->stat.name = did_r->dids.at(did_r->ptr);
+    if (did_r->types.at(did_r->ptr) == "file") {
+      did_r->stat.stat.st_mode = S_IFREG;
+    }
   }
 
   ++did_r->ptr;
@@ -189,7 +218,7 @@ dmlite::ExtendedStat *RucioCatalog::readDirx(dmlite::Directory *dir) throw (dmli
 
 std::string RucioCatalog::readLink(const std::string& path) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][READLINK]" << std::endl;
-  return "dummy_link";
+  return std::string();
 }
 
 void RucioCatalog::removeDir(const std::string& path) throw (dmlite::DmException) {

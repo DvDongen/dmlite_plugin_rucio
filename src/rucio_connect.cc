@@ -107,6 +107,7 @@ std::deque<did_t> RucioConnect::list_dids(std::string scope, std::string did) {
     tmp_did.scope = json_string_value(json_object_get(tmp_jj, "scope"));
     tmp_did.type = json_string_value(json_object_get(tmp_jj, "type"));
     response.push_back(tmp_did);
+    json_decref(tmp_jj);
   }
   json_decref(tmp_j);
 
@@ -119,5 +120,17 @@ std::deque<replica_t> RucioConnect::list_replicas(std::string scope, std::string
 
   std::deque<replica_t> dummy;
   return dummy;
+}
+
+did_t RucioConnect::get_did(std::string scope, std::string did) {
+  json_t *tmp_j = http_get_json(full_host + "/dids/" + scope);
+
+  did_t tmp_did;
+  tmp_did.did = json_string_value(json_object_get(tmp_j, "did"));
+  tmp_did.scope = json_string_value(json_object_get(tmp_j, "scope"));
+  tmp_did.type = json_string_value(json_object_get(tmp_j, "type"));
+  json_decref(tmp_j);
+
+  return tmp_did;
 }
 }
