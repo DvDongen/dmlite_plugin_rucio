@@ -11,6 +11,7 @@
 #ifndef RUCIO_CATALOG_H
 #define RUCIO_CATALOG_H
 
+#include <deque>
 #include <string>
 
 #include <dmlite/cpp/catalog.h>
@@ -25,18 +26,19 @@ namespace Rucio {
 class RucioDID : public dmlite::Directory {
   public:
     explicit RucioDID(std::string path);
+
     ~RucioDID();
     std::string path;
     std::deque<std::string> scopes;
     std::deque<std::string> dids;
     std::deque<std::string> types;
-    uint64_t ptr;
+    long ptr;
     dmlite::ExtendedStat stat;
 };
 
 class RucioCatalog : public dmlite::DummyCatalog {
   public:
-    RucioCatalog(dmlite::Catalog *next, std::string host, std::string auth_token, std::string ca_cert) throw (dmlite::DmException);
+    RucioCatalog(dmlite::Catalog *next, std::string host, std::string port, std::string auth_token, std::string ca_cert) throw (dmlite::DmException);
     ~RucioCatalog();
 
     std::string getImplId() const throw ();
@@ -75,8 +77,12 @@ class RucioCatalog : public dmlite::DummyCatalog {
     void utime(const std::string& path, const struct utimbuf *buf) throw (dmlite::DmException);
 
   private:
+    std::deque<std::string> __splitPath(std::string path);
+    std::string __sanitizePath(std::string path);
+    void __debugPrintPath();
+
     RucioConnect *rc;
-    std::string cwd;
+    std::deque<std::string> cwd;
 };
 }
 

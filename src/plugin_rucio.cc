@@ -22,6 +22,7 @@ namespace Rucio {
 
 RucioFactory::RucioFactory(dmlite::CatalogFactory *next) : next(next) {
   host = "fallback-hostname.com";
+  port = "443";
   auth_host = "fallback-hostname.com";
   auth_method = "userpass"; // one of 'userpass', 'x509', 'x509_proxy', 'gss'
   ca_cert = "/opt/rucio/etc/web/ca.crt";
@@ -39,6 +40,8 @@ void RucioFactory::configure(const std::string& key, const std::string& value) t
     this->auth_method = value;
   } else if (key == "RucioHost") {
     this->host = value;
+  } else if (key == "RucioPort") {
+    this->port = port;
   } else if (key == "RucioAuthToken") {
     this->auth_token = value;
   } else if (key == "RucioCACert") {
@@ -58,7 +61,7 @@ dmlite::Catalog *RucioFactory::createCatalog(dmlite::PluginManager *pm) throw (d
   }
   ca_file.close();
 
-  return new RucioCatalog(dmlite::CatalogFactory::createCatalog(next, pm), host, auth_token, ca_cert);
+  return new RucioCatalog(dmlite::CatalogFactory::createCatalog(next, pm), host, port, auth_token, ca_cert);
 }
 }
 

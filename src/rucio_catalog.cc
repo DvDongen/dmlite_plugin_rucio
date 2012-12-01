@@ -43,13 +43,12 @@ RucioDID::~RucioDID() {
   std::cerr << "[RUCIO][DID][DTOR]" << std::endl;
 }
 
-RucioCatalog::RucioCatalog(dmlite::Catalog *next, std::string host, std::string auth_token, std::string ca_cert) throw (dmlite::DmException) :
+RucioCatalog::RucioCatalog(dmlite::Catalog *next, std::string host, std::string port, std::string auth_token,
+                           std::string ca_cert) throw (dmlite::DmException) :
   dmlite::DummyCatalog(next) {
   std::cerr << "[RUCIO][CATALOG][CTOR] " << next->getImplId() << std::endl;
 
-  cwd = "/";
-
-  rc = new RucioConnect(host, auth_token, ca_cert);
+  rc = new RucioConnect(host, port, auth_token, ca_cert);
 }
 
 RucioCatalog::~RucioCatalog() {
@@ -68,24 +67,66 @@ void RucioCatalog::addReplica(const dmlite::Replica& replica) throw (dmlite::DmE
 void RucioCatalog::changeDir(const std::string& path) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][CHANGEDIR]" << std::endl;
 
-  if (path == "~") { // Home is root
-    cwd = "/";
-  } else if (path == ".") { // Nothing to do
-    return;
-  } else if (path == "..") { // Go back up one,
-    if (cwd == "/") { // unless we're already at root
-      return;
+  std::deque<std::string> original = cwd;
+
+  std::string tmp_path = __sanitizePath(path);
+
+  if (tmp_path == "~") { // Home is root
+    if (!cwd.empty()) { // So remove everything else
+      cwd.clear();
     }
-    cwd = cwd.substr(0, cwd.rfind("/"));
+  } else if (tmp_path == ".") { // Nothing to do
+  } else if (tmp_path == "..") { // Go back up one
+    if (!cwd.empty()) { // not necessary, if we're already at root
+      cwd.erase(cwd.end());
+    }
   } else { // Change to the given directory
-    if (path.at(0) == '/') { // Is it a full path?
-      cwd = path;
-    } else { // or relative?
-      if (cwd == "/") {
-        cwd = cwd + path;
+    if (tmp_path == "/") { // Go back to root
+      cwd.clear();
+    } else if ((tmp_path.at(0) == '/') && (tmp_path.size() > 1)) { // Is it a full tmp_path?
+      cwd = __splitPath(tmp_path);
+    } else { // Or relative?
+      if (tmp_path.find("/") != std::string::npos) { // Is it a hierarchy?
+        if (cwd.empty()) { // Are we at root already?
+          cwd.push_back(tmp_path); // If yes, just add the relative
+        } else {
+          cwd.push_back(tmp_path); // And the tmp_path
+        }
       } else {
-        cwd = cwd + "/" + path;
+        std::deque<std::string> tmp_split = __splitPath(path);
+        uint i = 0;
+        for (uint i = 0; i < tmp_split.size(); ++i) {
+          cwd.push_back(tmp_split.at(i));
+        }
       }
+    }
+  }
+
+  std::string tmp_scope;
+  std::string tmp_did;
+
+  if (cwd.empty()) {
+    return;
+  } else if (cwd.size() == 1) {
+    bool found = false;
+    std::deque<std::string> tmp_scopes = rc->list_scopes();
+    for (uint i = 0; i < tmp_scopes.size(); ++i) {
+      if (tmp_scopes.at(i) == cwd.back()) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      cwd = original;
+      throw dmlite::DmException(DMLITE_SYSERR(1), "directory does not exist");
+    }
+  } else if (cwd.size() > 1) {
+    tmp_scope = cwd.back().substr(0, cwd.back().find(":"));
+    tmp_did = cwd.back().substr(cwd.back().find(":") + 1);
+    did_t exists = rc->get_did(tmp_scope, tmp_did);
+    if (exists.scope.empty() && exists.did.empty() && exists.type.empty()) {
+      cwd = original;
+      throw dmlite::DmException(DMLITE_SYSERR(1), "directory does not exist");
     }
   }
 }
@@ -103,12 +144,23 @@ void RucioCatalog::create(const std::string& path, mode_t mode) throw (dmlite::D
 
 dmlite::ExtendedStat RucioCatalog::extendedStat(const std::string& path, bool followSym) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][EXTENDEDSTAT]" << std::endl;
-  dmlite::ExtendedStat dummy;
-  return dummy;
+  dmlite::ExtendedStat stat_e;
+
+  std::string tmp_path = __sanitizePath(path);
+
+  if (tmp_path == "/") {
+    stat_e.name = "/";
+  } else {
+    std::deque<std::string> splits = __splitPath(tmp_path);
+    stat_e.name = splits.back();
+    stat_e.stat.st_mode = S_IFREG;
+  }
+  return stat_e;
 }
 
 std::string RucioCatalog::getComment(const std::string& path) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][GETCOMMENT]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
   return std::string();
 }
 
@@ -120,13 +172,18 @@ dmlite::Replica RucioCatalog::getReplica(const std::string *rfn) throw (dmlite::
 
 std::vector<dmlite::Replica> RucioCatalog::getReplicas(const std::string& path) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][GETREPLICAS]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
   std::vector<dmlite::Replica> dummy;
   return dummy;
 }
 
 std::string RucioCatalog::getWorkingDir() throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][GETWORKINGDIR]" << std::endl;
-  return cwd;
+  std::string cwd_s = "/";
+  for (int i = 0; i < cwd.size(); ++i) {
+    cwd_s += cwd.at(i) + "/";
+  }
+  return cwd_s;
 }
 
 void RucioCatalog::makeDir(const std::string& path, mode_t mode) throw (dmlite::DmException) {
@@ -136,18 +193,25 @@ void RucioCatalog::makeDir(const std::string& path, mode_t mode) throw (dmlite::
 dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][OPENDIR]" << std::endl;
 
-  /**
-   * TODO: Check if directory actually exists
-   *
-   * Needs additional peek server call. For now, just accept and hope for the best.
-   */
-  RucioDID *did_r = new RucioDID(path);
+  std::string tmp_path = __sanitizePath(path);
+
+  RucioDID *did_r = new RucioDID(tmp_path);
+
+  did_r->scopes.push_back(".");
+  did_r->scopes.push_back("..");
+  did_r->dids.push_back(std::string());
+  did_r->dids.push_back(std::string());
+  did_r->types.push_back(std::string());
+  did_r->types.push_back(std::string());
 
   /**
    * The root directory is special, because it's only a list of scopes
    */
-  if (path == "/") {
-    did_r->scopes = rc->list_scopes();
+  if (tmp_path == "/") {
+    std::deque<std::string> tmp_scopes = rc->list_scopes();
+    for (uint i = 0; i < tmp_scopes.size(); ++i) {
+      did_r->scopes.push_back(tmp_scopes.at(i));
+    }
   } else {
 
     /**
@@ -156,9 +220,9 @@ dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite:
     std::deque<std::string> tokens;
     std::string::size_type tokenOff = 0, sepOff = tokenOff;
     while (sepOff != std::string::npos) {
-      sepOff = path.find('/', sepOff);
+      sepOff = tmp_path.find('/', sepOff);
       std::string::size_type tokenLen = (sepOff == std::string::npos) ? sepOff : sepOff++ - tokenOff;
-      std::string token = path.substr(tokenOff, tokenLen);
+      std::string token = tmp_path.substr(tokenOff, tokenLen);
       if (!token.empty()) {
         tokens.push_back(token);
       }
@@ -168,15 +232,16 @@ dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite:
     /**
      * Just look at the last two entries.
      */
-    std::string scope;
-    std::string did;
-    if (tokens.size() % 2) {
-      scope = tokens.at(tokens.size() - 1);
+
+    std::string tmp_scope = tokens.back().substr(0, tokens.back().find(":"));
+    std::string tmp_did = tokens.back().substr(tokens.back().find(":") + 1);
+
+    std::deque<did_t> tmp_r;
+    if (cwd.size() == 1) {
+      tmp_r = rc->list_dids(tmp_scope, std::string());
     } else {
-      did = tokens.at(tokens.size() - 1);
-      scope = tokens.at(tokens.size() - 2);
+      tmp_r = rc->list_dids(tmp_scope, tmp_did);
     }
-    std::deque<did_t> tmp_r = rc->list_dids(scope, did);
     for (uint i = 0; i < tmp_r.size(); ++i) {
       did_r->scopes.push_back(tmp_r.at(i).scope);
       did_r->dids.push_back(tmp_r.at(i).did);
@@ -198,15 +263,22 @@ dmlite::ExtendedStat *RucioCatalog::readDirx(dmlite::Directory *dir) throw (dmli
 
   RucioDID *did_r = dynamic_cast<RucioDID *> (dir);
 
-  if ((did_r->ptr == did_r->scopes.size()) || (did_r->scopes.size() == 0)) {
+  if ((did_r->ptr == did_r->scopes.size()) || (did_r->scopes.empty())) {
     return NULL;
   }
 
   if (did_r->path == "/") {
     did_r->stat.name = did_r->scopes.at(did_r->ptr);
   } else {
-    // did_r->stat.name = "/" + did_r->scopes.at(did_r->ptr) + "/" + did_r->dids.at(did_r->ptr);
-    did_r->stat.name = did_r->dids.at(did_r->ptr);
+    if (did_r->scopes.at(did_r->ptr).empty()) {
+      did_r->stat.name = did_r->dids.at(did_r->ptr);
+    } else {
+      if (did_r->dids.at(did_r->ptr).empty()) {
+        did_r->stat.name = did_r->scopes.at(did_r->ptr);
+      } else {
+        did_r->stat.name = did_r->scopes.at(did_r->ptr) + ":" + did_r->dids.at(did_r->ptr);
+      }
+    }
     if (did_r->types.at(did_r->ptr) == "file") {
       did_r->stat.stat.st_mode = S_IFREG;
     }
@@ -218,40 +290,52 @@ dmlite::ExtendedStat *RucioCatalog::readDirx(dmlite::Directory *dir) throw (dmli
 
 std::string RucioCatalog::readLink(const std::string& path) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][READLINK]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
+
   return std::string();
 }
 
 void RucioCatalog::removeDir(const std::string& path) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][REMOVEDIR]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
 }
 
 void RucioCatalog::rename(const std::string& oldPath, const std::string& newPath) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][RENAME]" << std::endl;
+  std::string tmp_oldPath = __sanitizePath(oldPath);
+  std::string tmp_newPath = __sanitizePath(newPath);
 }
 
 void RucioCatalog::setAcl(const std::string& path, const dmlite::Acl& acl) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][SETACL]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
 }
 
 void RucioCatalog::setChecksum(const std::string& path, const std::string& csumtype, const std::string &
                                csumvalue) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][SETCHECKSUM]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
 }
 
 void RucioCatalog::setComment(const std::string& path, const std::string& comment) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][SETCOMMENT]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
 }
 
 void RucioCatalog::setGuid(const std::string& path, const std::string& guid) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][SETGUID]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
 }
 
 void RucioCatalog::setMode(const std::string& path, mode_t mode) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][SETMODE]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
 }
 
-void RucioCatalog::setOwner(const std::string& path, uid_t newUid, gid_t newGid, bool followSymlink) throw (dmlite::DmException) {
+void RucioCatalog::setOwner(const std::string& path, uid_t newUid, gid_t newGid,
+                            bool followSymlink) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][SETOWNER]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
 }
 
 void RucioCatalog::setSecurityContext(const dmlite::SecurityContext *ctx) throw (dmlite::DmException) {
@@ -260,6 +344,7 @@ void RucioCatalog::setSecurityContext(const dmlite::SecurityContext *ctx) throw 
 
 void RucioCatalog::setSize(const std::string& path, size_t newSize) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][SETSIZE]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
 }
 
 void RucioCatalog::setStackInstance(dmlite::StackInstance *si) throw (dmlite::DmException) {
@@ -268,6 +353,7 @@ void RucioCatalog::setStackInstance(dmlite::StackInstance *si) throw (dmlite::Dm
 
 void RucioCatalog::symlink(const std::string& path, const std::string symlink) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][SYMLINK]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
 }
 
 mode_t RucioCatalog::umask(mode_t mask) throw () {
@@ -277,10 +363,13 @@ mode_t RucioCatalog::umask(mode_t mask) throw () {
 
 void RucioCatalog::unlink(const std::string& path) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][UNLINK]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
 }
 
-void RucioCatalog::updateExtendedAttributes(const std::string& path, const dmlite::Extensible& attr) throw (dmlite::DmException) {
+void RucioCatalog::updateExtendedAttributes(const std::string& path, const dmlite::Extensible &
+                                            attr) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][UPDATEEXTENDEDATTRIBUTES]" << std::endl;
+  std::string tmp_path = __sanitizePath(path);
 }
 
 void RucioCatalog::updateReplica(const dmlite::Replica& replica) throw (dmlite::DmException) {
@@ -289,5 +378,43 @@ void RucioCatalog::updateReplica(const dmlite::Replica& replica) throw (dmlite::
 
 void RucioCatalog::utime(const std::string& path, const struct utimbuf *buf) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][UTIME]" << std::endl;
+
+  std::string tmp_path = __sanitizePath(path);
+}
+
+std::string RucioCatalog::__sanitizePath(std::string path) {
+  std::string tmp_path = path;
+
+  size_t f;
+
+  while ((f = tmp_path.find("//")) != std::string::npos) { // Remove double slashes
+    tmp_path.replace(f, 2, std::string("/"));
+  }
+
+  if ((tmp_path.size() > 1) && (tmp_path.at(tmp_path.size() - 1) == '/')) { // Remove slash at the end
+    tmp_path.erase(tmp_path.size() - 1);
+  }
+
+  return tmp_path;
+}
+
+std::deque<std::string> RucioCatalog::__splitPath(std::string path) {
+  std::deque<std::string> tmp_split;
+
+  size_t prev = 0;
+  size_t next = 0;
+
+  while ((next = path.find_first_of("/", prev)) != std::string::npos) {
+    if ((next - prev) != 0) {
+      tmp_split.push_back(path.substr(prev, next - prev));
+    }
+    prev = next + 1;
+  }
+
+  if (prev < path.size()) {
+    tmp_split.push_back(path.substr(prev));
+  }
+
+  return tmp_split;
 }
 }

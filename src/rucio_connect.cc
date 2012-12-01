@@ -22,7 +22,7 @@ size_t write_fp(void *ptr, size_t size, size_t nmemb, void *stream) {
 
   mem->memory = (char *)realloc(mem->memory, mem->size + actual_size + 1);
   if (mem->memory == NULL) {
-    std::cerr << "out of memory";
+    std::cerr << "out of memory, cannot allocate " << mem->size + actual_size + 1 << " bytes";
     return 0;
   }
 
@@ -35,9 +35,9 @@ size_t write_fp(void *ptr, size_t size, size_t nmemb, void *stream) {
 
 namespace Rucio {
 
-RucioConnect::RucioConnect(std::string host, std::string auth_token, std::string ca_cert) {
+RucioConnect::RucioConnect(std::string host, std::string port, std::string auth_token, std::string ca_cert) {
 
-  full_host = "https://" + host + ":443";
+  full_host = "https://" + host + ":" + port;
   full_auth = std::string("Rucio-Auth-Token: ") + auth_token;
 
   headers = NULL;
@@ -70,7 +70,7 @@ json_t *RucioConnect::http_get_json(std::string url) {
   curl_easy_perform(curl);
   tmp_j = json_loads(chunk.memory, 0, &json_error);
   if (!tmp_j) {
-    std::cerr << "invalid json response from server: " << json_error.line << " -- " << json_error.text << std::endl;
+    std::cerr << chunk.memory << '\n' << "invalid json response from server (line " << json_error.line << "): " << json_error.text << std::endl;
   }
   free(chunk.memory);
 
@@ -123,12 +123,15 @@ std::deque<replica_t> RucioConnect::list_replicas(std::string scope, std::string
 }
 
 did_t RucioConnect::get_did(std::string scope, std::string did) {
-  json_t *tmp_j = http_get_json(full_host + "/dids/" + scope);
+  json_t *tmp_j = http_get_json(full_host + "/dids/" + scope + "/" + did);
 
   did_t tmp_did;
-  tmp_did.did = json_string_value(json_object_get(tmp_j, "did"));
-  tmp_did.scope = json_string_value(json_object_get(tmp_j, "scope"));
-  tmp_did.type = json_string_value(json_object_get(tmp_j, "type"));
+
+  if (tmp_j != NULL) {
+    tmp_did.did = json_string_value(json_object_get(tmp_j, "did"));
+    tmp_did.scope = json_string_value(json_object_get(tmp_j, "scope"));
+    tmp_did.type = json_string_value(json_object_get(tmp_j, "type"));
+  }
   json_decref(tmp_j);
 
   return tmp_did;
