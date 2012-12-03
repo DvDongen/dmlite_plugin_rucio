@@ -24,7 +24,7 @@ RucioFactory::RucioFactory(dmlite::CatalogFactory *next) : next(next) {
   host = "fallback-hostname.com";
   port = "443";
   auth_host = "fallback-hostname.com";
-  auth_method = "userpass"; // one of 'userpass', 'x509', 'x509_proxy', 'gss'
+  auth_method = "userpass";
   ca_cert = "/opt/rucio/etc/web/ca.crt";
 }
 

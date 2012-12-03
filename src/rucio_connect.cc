@@ -8,10 +8,12 @@
  * - Mario Lassnig, <mario.lassnig@cern.ch>, 2012
  */
 
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 
-#include "jansson.h"
+#include <curl/curl.h>
+#include <json/json.h>
 
 #include "rucio_connect.h"
 
@@ -60,17 +62,16 @@ RucioConnect::~RucioConnect() {
   curl_global_cleanup();
 }
 
-json_t *RucioConnect::http_get_json(std::string url) {
-  json_t *tmp_j;
-  json_error_t json_error;
+json_object *RucioConnect::http_get_json(std::string url) {
+  json_object *tmp_j;
 
   chunk.memory = (char *)malloc(1);
   chunk.size = 0;
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   curl_easy_perform(curl);
-  tmp_j = json_loads(chunk.memory, 0, &json_error);
+  tmp_j = json_tokener_parse(chunk.memory);
   if (!tmp_j) {
-    std::cerr << chunk.memory << '\n' << "invalid json response from server (line " << json_error.line << "): " << json_error.text << std::endl;
+    std::cerr << "cannot parse json: " << chunk.memory << std::endl;
   }
   free(chunk.memory);
 
@@ -80,11 +81,11 @@ json_t *RucioConnect::http_get_json(std::string url) {
 std::deque<std::string> RucioConnect::list_scopes() {
   std::deque<std::string> response;
 
-  json_t *tmp_j = http_get_json(full_host + "/scopes/");
-  for (i = 0; i < json_array_size(tmp_j); ++i) {
-    response.push_back(json_string_value(json_array_get(tmp_j, i)));
+  json_object *tmp_j = http_get_json(full_host + "/scopes/");
+  for (i = 0; i < json_object_array_length(tmp_j); ++i) {
+    response.push_back(json_object_get_string(json_object_array_get_idx(tmp_j, i)));
   }
-  json_decref(tmp_j);
+  json_object_put(tmp_j);
 
   return response;
 }
@@ -92,24 +93,22 @@ std::deque<std::string> RucioConnect::list_scopes() {
 std::deque<did_t> RucioConnect::list_dids(std::string scope, std::string did) {
   std::deque<did_t> response;
 
-  json_t *tmp_j;
-
+  json_object *tmp_j;
   if (did.empty()) {
     tmp_j = http_get_json(full_host + "/dids/" + scope + "/");
   } else {
     tmp_j = http_get_json(full_host + "/dids/" + scope + "/" + did + "/dids");
   }
 
-  for (i = 0; i < json_array_size(tmp_j); ++i) {
-    json_t *tmp_jj = json_array_get(tmp_j, i);
-    did_t tmp_did;
-    tmp_did.did = json_string_value(json_object_get(tmp_jj, "did"));
-    tmp_did.scope = json_string_value(json_object_get(tmp_jj, "scope"));
-    tmp_did.type = json_string_value(json_object_get(tmp_jj, "type"));
+  did_t tmp_did;
+  for (i = 0; i < json_object_array_length(tmp_j); ++i) {
+    json_object *tmp_jj = json_object_array_get_idx(tmp_j, i);
+    tmp_did.did = json_object_get_string(json_object_object_get(tmp_jj, "did"));
+    tmp_did.scope = json_object_get_string(json_object_object_get(tmp_jj, "scope"));
+    tmp_did.type = json_object_get_string(json_object_object_get(tmp_jj, "type"));
+    json_object_put(tmp_jj);
     response.push_back(tmp_did);
-    json_decref(tmp_jj);
   }
-  json_decref(tmp_j);
 
   return response;
 }
@@ -123,16 +122,16 @@ std::deque<replica_t> RucioConnect::list_replicas(std::string scope, std::string
 }
 
 did_t RucioConnect::get_did(std::string scope, std::string did) {
-  json_t *tmp_j = http_get_json(full_host + "/dids/" + scope + "/" + did);
+  json_object *tmp_j = http_get_json(full_host + "/dids/" + scope + "/" + did);
 
   did_t tmp_did;
 
   if (tmp_j != NULL) {
-    tmp_did.did = json_string_value(json_object_get(tmp_j, "did"));
-    tmp_did.scope = json_string_value(json_object_get(tmp_j, "scope"));
-    tmp_did.type = json_string_value(json_object_get(tmp_j, "type"));
+    tmp_did.did = json_object_get_string(json_object_object_get(tmp_j, "did"));
+    tmp_did.scope = json_object_get_string(json_object_object_get(tmp_j, "scope"));
+    tmp_did.type = json_object_get_string(json_object_object_get(tmp_j, "type"));
   }
-  json_decref(tmp_j);
+  json_object_put(tmp_j);
 
   return tmp_did;
 }

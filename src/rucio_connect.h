@@ -15,7 +15,7 @@
 #include <string>
 
 #include <curl/curl.h>
-#include <jansson.h>
+#include <json/json.h>
 
 /* CURL callback */
 typedef struct {
@@ -64,7 +64,7 @@ class RucioConnect {
     std::string full_host;
     std::string full_auth;
 
-    json_t *http_get_json(std::string url);
+    json_object *http_get_json(std::string url);
 };
 }
 

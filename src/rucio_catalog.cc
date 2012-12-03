@@ -71,6 +71,8 @@ void RucioCatalog::changeDir(const std::string& path) throw (dmlite::DmException
 
   std::string tmp_path = __sanitizePath(path);
 
+  std::cerr << tmp_path << std::endl;
+
   if (tmp_path == "~") { // Home is root
     if (!cwd.empty()) { // So remove everything else
       cwd.clear();
@@ -146,6 +148,17 @@ dmlite::ExtendedStat RucioCatalog::extendedStat(const std::string& path, bool fo
   std::cerr << "[RUCIO][CATALOG][EXTENDEDSTAT]" << std::endl;
   dmlite::ExtendedStat stat_e;
 
+  stat_e.guid = "0";
+  stat_e.csumtype = "ad";
+  stat_e.csumvalue = "00000000";
+  stat_e.stat.st_mode = S_IFDIR;
+  stat_e.stat.st_uid = 0;
+  stat_e.stat.st_gid = 0;
+  stat_e.stat.st_size = 0;
+  stat_e.stat.st_atime = 0;
+  stat_e.stat.st_mtime = 0;
+  stat_e.stat.st_ctime = 0;
+
   std::string tmp_path = __sanitizePath(path);
 
   if (tmp_path == "/") {
@@ -153,7 +166,7 @@ dmlite::ExtendedStat RucioCatalog::extendedStat(const std::string& path, bool fo
   } else {
     std::deque<std::string> splits = __splitPath(tmp_path);
     stat_e.name = splits.back();
-    stat_e.stat.st_mode = S_IFREG;
+    // stat_e.stat.st_mode = S_IFREG;
   }
   return stat_e;
 }
@@ -182,6 +195,10 @@ std::string RucioCatalog::getWorkingDir() throw (dmlite::DmException) {
   std::string cwd_s = "/";
   for (int i = 0; i < cwd.size(); ++i) {
     cwd_s += cwd.at(i) + "/";
+  }
+
+  if (cwd_s != "/") {
+    cwd_s = cwd_s.substr(0, cwd_s.size() - 1);
   }
   return cwd_s;
 }
@@ -213,7 +230,6 @@ dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite:
       did_r->scopes.push_back(tmp_scopes.at(i));
     }
   } else {
-
     /**
      * Everything else is a combination of scope, DID, or both. So split it up and let's see what we've got.
      */
@@ -232,9 +248,12 @@ dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite:
     /**
      * Just look at the last two entries.
      */
-
     std::string tmp_scope = tokens.back().substr(0, tokens.back().find(":"));
     std::string tmp_did = tokens.back().substr(tokens.back().find(":") + 1);
+
+    if ((tmp_scope == ".") && (tmp_did == ".")) {
+      return did_r;
+    }
 
     std::deque<did_t> tmp_r;
     if (cwd.size() == 1) {
@@ -243,6 +262,7 @@ dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite:
       tmp_r = rc->list_dids(tmp_scope, tmp_did);
     }
     for (uint i = 0; i < tmp_r.size(); ++i) {
+      // std::cerr << tmp_r.at(i).scope << tmp_r.at(i).did << tmp_r.at(i).type << std::endl;
       did_r->scopes.push_back(tmp_r.at(i).scope);
       did_r->dids.push_back(tmp_r.at(i).did);
       did_r->types.push_back(tmp_r.at(i).type);
@@ -383,8 +403,21 @@ void RucioCatalog::utime(const std::string& path, const struct utimbuf *buf) thr
 }
 
 std::string RucioCatalog::__sanitizePath(std::string path) {
-  std::string tmp_path = path;
 
+  std::string tmp_path;
+
+  if (path == ".") {
+    tmp_path = "/";
+    for (uint i = 0; i < cwd.size(); ++i) {
+      tmp_path = cwd.at(i) + "/";
+    }
+    if (tmp_path != "/") {
+      tmp_path = tmp_path.substr(0, tmp_path.size() - 1);
+    }
+    return tmp_path;
+  }
+
+  tmp_path = path;
   size_t f;
 
   while ((f = tmp_path.find("//")) != std::string::npos) { // Remove double slashes
