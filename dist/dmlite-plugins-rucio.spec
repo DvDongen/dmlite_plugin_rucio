@@ -15,6 +15,7 @@ BuildRequires:  libcurl-devel
 %else
 BuildRequires:  curl-devel
 %endif
+BuildRequires:  json-c-devel
 
 %description
 This package provides the Rucio plug-in for dmlite.
