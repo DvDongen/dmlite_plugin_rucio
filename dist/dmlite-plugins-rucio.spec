@@ -42,5 +42,6 @@ rm -rf %{buildroot}
 %{_libdir}/dmlite/plugin_rucio.so
 %doc LICENSE README RELEASE-NOTES
 %config(noreplace) %{_sysconfdir}/dmlite.conf.d/*
+%config(noreplace) %{_sysconfdir}/rucio.conf.d/*
 
 %changelog
