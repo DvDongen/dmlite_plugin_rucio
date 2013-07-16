@@ -6,6 +6,7 @@
  *
  * Authors:
  * - Mario Lassnig, <mario.lassnig@cern.ch>, 2012
+ * - Daan van Dongen, <Daanvandongen@gmail.com>, 2013
  */
 
 #ifndef RUCIO_CATALOG_H
@@ -32,6 +33,7 @@ class RucioDID : public dmlite::Directory {
     std::deque<std::string> scopes;
     std::deque<std::string> dids;
     std::deque<std::string> types;
+	std::deque<std::string> RSE;
     long ptr;
     dmlite::ExtendedStat stat;
 };

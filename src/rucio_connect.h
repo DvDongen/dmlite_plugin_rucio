@@ -6,6 +6,7 @@
  *
  * Authors:
  * - Mario Lassnig, <mario.lassnig@cern.ch>, 2012
+ * - Daan van Dongen, <Daanvandongen@gmail.com>, 2013
  */
 
 #ifndef RUCIO_CONNECT_H
@@ -28,8 +29,9 @@ namespace Rucio {
 
 typedef struct {
   std::string scope;
-  std::string did;
   std::string type;
+  std::string name;
+  std::string RSE;
 } did_t;
 
 typedef struct  {
@@ -53,6 +55,12 @@ class RucioConnect {
 
     did_t get_did(std::string scope, std::string did);
 
+    std::deque<did_t> list_rses(std::string scope, std::string did);
+
+    did_t get_did_status(std::string scope, std::string did);
+
+    did_t get_rse_status(std::string rse);
+
   private:
     struct curl_slist *headers;
 
@@ -64,7 +72,7 @@ class RucioConnect {
     std::string full_host;
     std::string full_auth;
 
-    json_object *http_get_json(std::string url);
+    json_object *http_get_url_json(std::string url);
 };
 }
 
