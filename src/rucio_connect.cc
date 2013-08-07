@@ -53,11 +53,9 @@ void clean_json_stream(mem_t *mem){ 				//cleans up the JSON stream to correctly
 			while(mem->memory[i]==' ' && i< mem->size){
 				i++;
 			}
-
 			if( mem->memory[i]=='"'){
 				apo_c = -1*apo_c;
 			}
-
 			if( apo_c == -1){				//check if you're not inside " "
 				if( mem->memory[i] == '[' && check1 == TRUE){
 					bra_c++;
@@ -68,11 +66,9 @@ void clean_json_stream(mem_t *mem){ 				//cleans up the JSON stream to correctly
 				if( bra_c <= 0 && check1 == TRUE && i< mem->size-1){ 	//Also returns FALSE if (mem->memory[0]!='[')
 					check1 = FALSE;
 				}
-
 				if( mem->memory[i]=='\n'){
 					mem->memory[i]=',';
 				}
-
 				if( mem->memory[i]== '}' && i!=mem->size-1){	//Have not encountered these yet. But else this method would fail if you do
 					if( mem->memory[i+1]=='{'){
 						std::cerr << "ERROR: Encountered \"}{\"" << std::endl;
@@ -81,7 +77,6 @@ void clean_json_stream(mem_t *mem){ 				//cleans up the JSON stream to correctly
 						std::cerr << "ERROR: Encountered \"}[\"" << std::endl;
 					}
 				}
-
 				if( mem->memory[i]==']' && i!=mem->size-1){
 					if( mem->memory[i+1]=='['){
 						std::cerr << "ERROR: Encountered \"][\"" << std::endl;
@@ -99,21 +94,17 @@ void clean_json_stream(mem_t *mem){ 				//cleans up the JSON stream to correctly
 			for( int i=0 ; i<mem->size ; i++){
 				tmp_c[i+1] = mem->memory[i];
 			}
-
 			if( tmp_c[mem->size] == ',' ){
 				tmp_c[mem->size]= ']';
 				tmp_c[mem->size+1]= ' ';
-			}
-			else{
+			} else{
 				tmp_c[mem->size+1]= ']';
 			}
-
 			delete[] mem->memory;
 			mem->size += 2;
 			mem->memory = tmp_c;
 		}
 	}
-
 	if( mem->size = 0){					//Dealing with empty strings
 		char* tmp_cc = new char[2];
 		tmp_cc[0] = '[';
@@ -124,12 +115,34 @@ void clean_json_stream(mem_t *mem){ 				//cleans up the JSON stream to correctly
 	}
 }
 
+std::deque<std::string> get_json_rsekeys(std::string json){
+	std::deque<std::string> result;
+	std::string tmp = "";
+	int record = -1;
+	for(int i=0 ; i<json.size() ; i++){
+		while( i<json.size()-1 && json.at(i)== '\\'){
+			i++;
+		}
+		if(record ==1 && json.at(i) != '"'){
+			tmp = tmp + json.at(i);
+		}
+		if( json.at(i) == '"'){
+			if(record ==1){
+				result.push_back(tmp);
+				tmp = "";
+			}
+			record = -1*record;
+		}
+	}
+	return result;
+}
+
 namespace Rucio {
 
 RucioConnect::RucioConnect(std::string host, std::string port, std::string auth_token, std::string ca_cert) {
 
   full_host = "https://" + host + ":" + port;
-full_auth = std::string("X-Rucio-Auth-Token: ") + auth_token;
+  full_auth = std::string("X-Rucio-Auth-Token: ") + auth_token;
 
   headers = NULL;
 
@@ -163,7 +176,7 @@ json_object *RucioConnect::http_get_url_json(std::string url) {
   }
 
   clean_json_stream(&chunk);
-  //std::cerr << chunk.memory << std::endl;
+  std::cerr << chunk.memory << std::endl;
 
   tmp_j = json_tokener_parse(chunk.memory);
   if (!tmp_j) {
@@ -199,7 +212,6 @@ std::deque<did_t> RucioConnect::list_dids(std::string scope, std::string did) {
     json_object *tmp_jj = json_object_array_get_idx(tmp_j, i);
     tmp_did.name = json_object_get_string(json_object_object_get(tmp_jj, "name"));
     tmp_did.scope = json_object_get_string(json_object_object_get(tmp_jj, "scope"));
-    tmp_did.scope = "/" + tmp_did.scope + "/" + tmp_did.scope + ":" + tmp_did.name;
     tmp_did.type = json_object_get_string(json_object_object_get(tmp_jj, "type"));
     tmp_did.RSE = "";
     json_object_put(tmp_jj);
@@ -226,13 +238,7 @@ std::deque<did_t> RucioConnect::list_rses(std::string scope, std::string did) {
     tmp_did.name = json_object_get_string(json_object_object_get(tmp_jj, "name"));
     tmp_did.RSE = json_object_get_string(json_object_object_get(tmp_jj, "rse"));
     tmp_did.scope = json_object_get_string(json_object_object_get(tmp_jj, "scope"));
-    if( tmp_did.RSE.size() != 0 ){
-	tmp_did.scope = "/" + tmp_did.scope + + "/" + tmp_did.scope + ";" + tmp_did.RSE + ":" + tmp_did.name;
-    }
-    else {
-	tmp_did.scope = "/" + tmp_did.scope + "/" + tmp_did.scope + ":" + tmp_did.name;
-    }
-    tmp_did.type = "RSE"; //This needs editing
+    tmp_did.type = "RSE";
     tmp_did.RSE = json_object_get_string(json_object_object_get(tmp_jj, "rse"));
     json_object_put(tmp_jj);
     response.push_back(tmp_did);
@@ -242,11 +248,27 @@ std::deque<did_t> RucioConnect::list_rses(std::string scope, std::string did) {
 }
 
 std::deque<replica_t> RucioConnect::list_replicas(std::string scope, std::string did) {
-  std::string url;
-  http_get_url_json(url);
+  json_object *tmp_j;
+  tmp_j = http_get_url_json(full_host + "/dids/" + scope + "/" + did + "/rses");
 
-  std::deque<replica_t> dummy;
-  return dummy;
+  std::deque<replica_t> response;
+  replica_t tmp_repl;
+  if(json_object_array_length(tmp_j) > 0){
+	std::string str_rses =json_object_get_string( json_object_object_get(json_object_array_get_idx(tmp_j, 0) , "rses" ) );
+	std::deque<std::string> deq_rses;
+	deq_rses = get_json_rsekeys(str_rses);
+
+	json_object *tmp_jj = json_object_array_get_idx(tmp_j, 0);
+	tmp_repl.pfn = "";
+	tmp_repl.size = json_object_get_int(json_object_object_get(tmp_jj, "bytes"));
+	tmp_repl.checksum = "0";
+	for (i = 0; i < deq_rses.size(); ++i) {
+		tmp_repl.RSE = deq_rses.at(i);
+		response.push_back(tmp_repl);
+	}
+	json_object_put(tmp_jj);
+  }
+  return response;
 }
 
 did_t RucioConnect::get_did(std::string scope, std::string did) {
@@ -296,6 +318,4 @@ did_t RucioConnect::get_rse_status(std::string rse) {
   json_object_put(tmp_j);
   return tmp_did;
 }
-
-
 }

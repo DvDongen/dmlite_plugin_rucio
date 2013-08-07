@@ -24,7 +24,7 @@ namespace Rucio {
 
 RucioDID::RucioDID(std::string path) : dmlite::Directory() {
   std::cerr << "[RUCIO][DID][CTOR]" << std::endl;
-  //std::cerr << path << std::endl;
+  std::cerr << path << std::endl;
 
   this->path = path;
   ptr = 0;
@@ -50,7 +50,7 @@ RucioCatalog::RucioCatalog(dmlite::Catalog *next, std::string host, std::string 
   dmlite::DummyCatalog(next) {
   std::cerr << "[RUCIO][CATALOG][CTOR] " << next->getImplId() << std::endl;
   rc = new RucioConnect(host, port , auth_token, ca_cert);
-  //std::cerr << "https://" <<  host << ":" << port << std::endl;
+  std::cerr << "https://" <<  host << ":" << port << std::endl;
 }
 
 RucioCatalog::~RucioCatalog() {
@@ -72,8 +72,8 @@ void RucioCatalog::changeDir(const std::string& path) throw (dmlite::DmException
   std::deque<std::string> original = cwd;
 
   std::string tmp_path = __sanitizePath(path);
-
-  //std::cerr << tmp_path << std::endl;
+  std::cerr << tmp_path << std::endl;
+  tmp_path = __seperatePath(tmp_path);
 
   if (tmp_path == "~") { // Home is root
     if (!cwd.empty()) { // So remove everything else
@@ -109,53 +109,109 @@ void RucioCatalog::changeDir(const std::string& path) throw (dmlite::DmException
   std::string tmp_scope;
   std::string tmp_did;
 
-
+  char* tmp_ch = new char(1);
 
   if (cwd.empty()) {
     return;
-  } else if (cwd.size() == 1) {
-    bool found = false;
-    std::deque<std::string> tmp_scopes = rc->list_scopes();
-    for (uint i = 0; i < tmp_scopes.size(); ++i) {
-      if (tmp_scopes.at(i) == cwd.back()) {
-        found = true;
-        break;
-      }
+  } else if (cwd.size() == 1) {					//Checking if it is a real scope
+    bool realscope = TRUE;
+    if( cwd.back() == "user"){
+	realscope = FALSE;
     }
+    for (uint i = 0; i < 26 && realscope == TRUE; ++i) {
+	tmp_ch[0] = (char) (97+i);
+	if( cwd.back() == (std::string) tmp_ch){
+		realscope = FALSE;
+	}
+    }
+
+    bool found = FALSE;
+    if( realscope == FALSE ){
+	found = TRUE;
+    } else {
+	std::deque<std::string> tmp_scopes = rc->list_scopes();
+	for (uint i = 0; i < tmp_scopes.size(); ++i) {
+	  if (tmp_scopes.at(i) == cwd.back()) {
+	    found = TRUE;
+	    break;
+	  }
+	}
+    }
+
+    delete[] tmp_ch;
+
     if (!found) {
       //cwd = original;
 	std::deque<std::string> tmp_sl;
-	tmp_sl.push_back("///");				//Changing the name to something that doesn't exist, now OpenDir gives no data
+	tmp_sl.push_back("///");				//Changing the name to something that doesn't exist, now Open Dir gives no data
 	cwd = tmp_sl;
 	std::cerr << "ERROR: Directory does not exist" <<std::endl;
       throw dmlite::DmException(DMLITE_SYSERR(1), "directory does not exist");
     }
   } else if (cwd.size() > 1) {
-	bool isrses = FALSE;
-	if (cwd.back() == "rses"){
-		cwd.pop_back();
-		isrses = TRUE;
-	}
+	std::string tmp_subscope = "";
+	std::string tmp_file = "";
 
-	if (cwd.back().find(":") != cwd.back().npos ){
-		tmp_scope = cwd.back().substr(0, cwd.back().find(":"));
-		tmp_did = cwd.back().substr(cwd.back().find(":") + 1);
-	}
-	else {
+	if (cwd.back().at(0) == '!' ){ //grabbing the did and scope from the back
+		tmp_did = cwd.back();
+		tmp_did.erase(0,1);
+		std::string tmp_re = cwd.back();
+		cwd.pop_back();
+		tmp_scope = cwd.back();
+		cwd.push_back(tmp_re);
+	} else {
 		tmp_scope = cwd.back();
 		tmp_did = "";
 	}
 
+	if( tmp_did != ""){		//looking if it is a FILE or something else
+		did_t tmp_status;
+		tmp_status = rc->get_did_status(tmp_scope, tmp_did);
+		if(tmp_status.type == "FILE"){
+			tmp_file = tmp_did;
+			tmp_did = "";
+			cwd.pop_back();
+			cwd.pop_back();
+			if( cwd.back().at(0) == '!'){
+				tmp_did = cwd.back();
+				tmp_did.erase(0,1);
+			}
+			cwd.push_back( tmp_scope) ;
+			cwd.push_back( tmp_file );
+		} else if( tmp_status.type != "DATASET" && tmp_status.type != "CONTAINER" ){
+			std::cerr << "ERROR: Unknown did type." << std::endl;
+		  }
+	}
+
+	if( tmp_subscope != ""){
+		cwd.push_back( tmp_subscope);
+	}
+
 	did_t exists;
 	exists = rc->get_did(tmp_scope, tmp_did);
+        if (exists.scope.empty() && exists.name.empty() && exists.type.empty()) {
+	     cwd = original;
+	     throw dmlite::DmException(DMLITE_SYSERR(1), "directory does not exist");
+	}
 
-    if (exists.scope.empty() && exists.name.empty() && exists.type.empty()) {
-      cwd = original;
-      throw dmlite::DmException(DMLITE_SYSERR(1), "directory does not exist");
-    }
-
-	if (isrses == TRUE){
-	    cwd.back() = cwd.back() + "/rses";
+	if(tmp_file != ""){
+		std::deque<did_t> Files;
+		Files = rc->list_dids(tmp_scope, tmp_did);
+		bool FileExists = FALSE;
+		uint i = 0;
+		for( i = 0; i<Files.size() && FileExists == FALSE ; i++){
+			if( Files.at(i).name == tmp_file && Files.at(i).type == "FILE"){
+				FileExists = TRUE;
+				break;
+			}
+		}
+		if (FileExists == FALSE) {
+			cwd = original;
+			std::cerr << "ERROR: File does not exist" << std::endl;
+			throw dmlite::DmException(DMLITE_SYSERR(1), "file does not exist");
+		} else {
+			cwd.back() = "!" + cwd.back();
+		}
 	}
   }
 }
@@ -178,7 +234,7 @@ dmlite::ExtendedStat RucioCatalog::extendedStat(const std::string& path, bool fo
   stat_e.guid = "0";
   stat_e.csumtype = "ad";
   stat_e.csumvalue = "00000000";
-  stat_e.stat.st_mode = S_IFDIR;
+  //stat_e.stat.st_mode = S_IFDIR;
   stat_e.stat.st_uid = 0;
   stat_e.stat.st_gid = 0;
   stat_e.stat.st_size = 0;
@@ -187,13 +243,57 @@ dmlite::ExtendedStat RucioCatalog::extendedStat(const std::string& path, bool fo
   stat_e.stat.st_ctime = 0;
 
   std::string tmp_path = __sanitizePath(path);
+  std::cerr << tmp_path << std::endl;
+  tmp_path = __seperatePath(tmp_path);
 
   if (tmp_path == "/") {
     stat_e.name = "/";
-  } else {
-    std::deque<std::string> splits = __splitPath(tmp_path);
-    stat_e.name = splits.back();
-    // stat_e.stat.st_mode = S_IFREG;
+    stat_e.stat.st_mode = S_IFDIR;
+    return stat_e;
+  }
+
+  std::deque<std::string> tokens;
+  std::string::size_type tokenOff = 0, sepOff = tokenOff, tmp_sit = 0;
+  while (sepOff < tmp_path.npos) {
+        tmp_sit = tmp_path.find('/', sepOff);
+        sepOff = tmp_sit;
+        std::string::size_type tokenLen = (sepOff == std::string::npos) ? sepOff : sepOff++ - tokenOff;
+        std::string token = tmp_path.substr(tokenOff, tokenLen);
+        if (!token.empty()) {
+          tokens.push_back(token);
+        }
+        tokenOff = sepOff;
+  }
+
+  std::string tmp_file = "";
+  std::string tmp_scope = "";
+
+  if(path.at(0) != '/'){	//pushing the cwd in the front of the path
+      for( int i=0 ; i< (int)(cwd.size())-1 ; i++){
+		tokens.push_front(cwd.at(cwd.size()-2-i));
+      }
+  }
+
+  if(tokens.back().at(0) == '!'  ){
+		tmp_file = tokens.back();
+		tmp_file.erase(0,1);
+		tokens.pop_back();
+		tmp_scope = tokens.back();
+		did_t tmp_status;
+		tmp_status = rc->get_did_status(tmp_scope, tmp_file);
+		if(tmp_status.type == "FILE"){
+			stat_e.stat.st_mode = S_IFREG;
+			stat_e.name = tmp_file;
+			std::deque<replica_t> tmp_deq_r;
+			tmp_deq_r = rc->list_replicas(tmp_scope, tmp_file);
+			if( tmp_deq_r.size() > 0){
+				stat_e.stat.st_size = tmp_deq_r.at(0).size;
+			}
+		}
+  }
+
+  if(stat_e.stat.st_mode != S_IFREG){
+	stat_e.stat.st_mode = S_IFDIR;
   }
 
   return stat_e;
@@ -214,8 +314,48 @@ dmlite::Replica RucioCatalog::getReplica(const std::string *rfn) throw (dmlite::
 std::vector<dmlite::Replica> RucioCatalog::getReplicas(const std::string& path) throw (dmlite::DmException) {
   std::cerr << "[RUCIO][CATALOG][GETREPLICAS]" << std::endl;
   std::string tmp_path = __sanitizePath(path);
-  std::vector<dmlite::Replica> dummy;
-  return dummy;
+  std::cerr << tmp_path << std::endl;
+  tmp_path = __seperatePath(tmp_path);
+
+  std::deque<std::string> tokens;
+  std::string::size_type tokenOff = 0, sepOff = tokenOff, tmp_sit = 0;
+  while (sepOff < tmp_path.npos) {
+        tmp_sit = tmp_path.find('/', sepOff);
+        sepOff = tmp_sit;
+        std::string::size_type tokenLen = (sepOff == std::string::npos) ? sepOff : sepOff++ - tokenOff;
+        std::string token = tmp_path.substr(tokenOff, tokenLen);
+        if (!token.empty()) {
+          tokens.push_back(token);
+        }
+        tokenOff = sepOff;
+  }
+
+  std::string tmp_scope = "";
+  std::string tmp_file = "";
+
+  if(path.at(0) != '/'){	//pushing the cwd in the front of the path
+      for( int i=0 ; i< (int)(cwd.size())-1 ; i++){
+		tokens.push_front(cwd.at(cwd.size()-2-i));
+      }
+  }
+
+  if(tokens.back().at(0) == '!'  ){
+		tmp_file = tokens.back();
+		tmp_file.erase(0,1);
+		tokens.pop_back();
+		tmp_scope = tokens.back();
+  }
+
+  std::vector<dmlite::Replica> tmp_repl;
+  std::deque<replica_t> tmp_deq_r;
+  tmp_deq_r = rc->list_replicas(tmp_scope, tmp_file);
+  for( int i=0 ; i<tmp_deq_r.size() ; i++){
+	dmlite::Replica replica;
+	replica.server	= "ThisIsAServername";
+	replica.rfn	= "--" + tmp_deq_r.at(i).RSE + "--" ;
+	tmp_repl.push_back(replica);
+  }
+  return tmp_repl;
 }
 
 std::string RucioCatalog::getWorkingDir() throw (dmlite::DmException) {
@@ -239,9 +379,13 @@ dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite:
   std::cerr << "[RUCIO][CATALOG][OPENDIR]" << std::endl;
 
   std::string tmp_path = __sanitizePath(path);
-  //std::cerr << tmp_path << std::endl;
+  std::cerr << tmp_path << std::endl;
+  tmp_path = __seperatePath(tmp_path);
 
   RucioDID *did_r = new RucioDID(tmp_path);
+
+  std::deque<std::string> tokens;		//tokens = your path
+  bool realscope= TRUE;
 
   did_r->scopes.push_back(".");
   did_r->scopes.push_back("..");
@@ -252,83 +396,212 @@ dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite:
   did_r->RSE.push_back(std::string());
   did_r->RSE.push_back(std::string());
 
-  /**
+    /**
    * The root directory is special, because it's only a list of scopes
    */
 
   if (tmp_path == "/") {
-    std::deque<std::string> tmp_scopes = rc->list_scopes();
-    for (uint i = 0; i < tmp_scopes.size(); ++i) {
-      did_r->scopes.push_back(tmp_scopes.at(i));
-	did_r->dids.push_back(std::string());
-	did_r->types.push_back("SCOPE");
-	did_r->RSE.push_back(std::string());
-    }
-  } else {
-    /**
-     * Everything else is a combination of scope, DID, or both. So split it up and let's see what we've got.
-     */
-    std::deque<std::string> tokens;		//tokens = your path
-    std::string::size_type tokenOff = 0, sepOff = tokenOff, tmp_sit = 0;
-    while (sepOff != std::string::npos) {
-      tmp_sit = tmp_path.find('/', sepOff);
-      sepOff = tmp_sit;
-      std::string::size_type tokenLen = (sepOff == std::string::npos) ? sepOff : sepOff++ - tokenOff;
-      std::string token = tmp_path.substr(tokenOff, tokenLen);
-      if (!token.empty()) {
-        tokens.push_back(token);
-      }
-      tokenOff = sepOff;
-    }
+    did_r->scopes.push_back( "user" );
+    did_r->dids.push_back(std::string());
+    did_r->types.push_back(std::string());
+    did_r->RSE.push_back(std::string());
 
-    /**
-     * Just look at the last two entries.
-     */
-
-    bool isrses = FALSE;
-    if (tokens.back() == "rses"){
-	tokens.pop_back();
-	isrses = TRUE;
-    }
-
-    if( cwd.size() > 1 && isrses == FALSE){				//adding RSEs
-	did_r->scopes.push_back("rses");
+    char* tmp_ch2 = new char(1);
+    for (uint i = 0; i < 26; ++i) {	//pushing back every letter
+	tmp_ch2[0] = (char) (97+i);
+	did_r->scopes.push_back( (std::string) tmp_ch2 );
 	did_r->dids.push_back(std::string());
 	did_r->types.push_back(std::string());
 	did_r->RSE.push_back(std::string());
     }
+    delete[] tmp_ch2;
 
-    std::string tmp_scope = tokens.back().substr(0, tokens.back().find(":"));
-    std::string tmp_did = tokens.back().substr(tokens.back().find(":") + 1);
+  } else {
+      std::string::size_type tokenOff = 0, sepOff = tokenOff, tmp_sit = 0;
+      while (sepOff < tmp_path.npos) {
+        tmp_sit = tmp_path.find('/', sepOff);
+        sepOff = tmp_sit;
+        std::string::size_type tokenLen = (sepOff == std::string::npos) ? sepOff : sepOff++ - tokenOff;
+        std::string token = tmp_path.substr(tokenOff, tokenLen);
+        if (!token.empty()) {
+          tokens.push_back(token);
+        }
+        tokenOff = sepOff;
+      }
 
-    if ((tmp_scope == ".") && (tmp_did == ".")) {
-      return did_r;
+      if(path.at(0) != '/'){	//pushing the cwd in the front of the path
+	      for( int i=0 ; i< (int)(cwd.size())-1 ; i++){
+			tokens.push_front(cwd.at(cwd.size()-2-i));
+	      }
+      }
+
+	/*
+	Checking if scopes need to be listed, or if it is a real existing scope
+	*/
+    std::string tmp_str = "";
+    realscope = TRUE;
+    if (tokens.size() == 1) {
+        if( tokens.back() == "user"){
+		tmp_str = "user";
+		realscope = FALSE;
+	}
+	for (uint i = 0; i < 26 && realscope == TRUE; ++i) {
+		tmp_str = (char) (97+i);
+		if( tokens.back() == tmp_str){
+			realscope =FALSE;
+			tmp_str = tmp_str;
+		}
+	}
     }
 
-    std::deque<did_t> tmp_r;
-	if( isrses == TRUE){
-		if (cwd.size() == 1 || cwd.size()==0) {
-			tmp_r = rc->list_rses(tmp_scope, std::string());
-		} else {
-			tmp_r = rc->list_rses(tmp_scope, tmp_did);
+    if(realscope == FALSE ) {
+    /**
+     * The listing of scopes based on there starting chars
+     */
+	std::deque<std::string> tmp_scopes = rc->list_scopes();
+	if( tmp_str == "user" ){
+		for (uint i = 0; i < tmp_scopes.size(); ++i) {
+			if( UpToLow(tmp_scopes.at(i).substr(0,4)) == "user" ){	//checking if it starts with "user"
+					did_r->scopes.push_back("/" + tmp_scopes.at(i));
+					did_r->dids.push_back(std::string());
+					did_r->types.push_back("SCOPE");
+					did_r->RSE.push_back(std::string());
+			}
+		}
+	} else {
+	  if(tmp_str == "u") {
+		for (uint i = 0; i < tmp_scopes.size(); ++i) {
+			if(UpToLow(tmp_scopes.at(i).substr(0,1)) == "u" && !(UpToLow(tmp_scopes.at(i).substr(0,4)) == "user") ){	//checking if it starts with "u", but not "user"
+					did_r->scopes.push_back("/" + tmp_scopes.at(i));
+					did_r->dids.push_back(std::string());
+					did_r->types.push_back("SCOPE");
+					did_r->RSE.push_back(std::string());
+			}
+		}
+	  } else {
+		for (uint i = 0; i < tmp_scopes.size(); ++i) {
+			if( UpToLow(tmp_scopes.at(i).substr(0,1)) == tmp_str){
+				did_r->scopes.push_back("/" + tmp_scopes.at(i));
+				did_r->dids.push_back(std::string());
+				did_r->types.push_back("SCOPE");
+				did_r->RSE.push_back(std::string());
+			}
+		}
+	    }
+	  }
+    } else {
+    /**
+     * Everything else is a combination of scope, DID, or both. So split it up and let's see what we've got.
+     */
+
+      /**
+       * Just look at the last two entries.
+       */
+      std::string tmp_subscope = "";
+      std::string tmp_scope = "";
+      std::string tmp_did = "";
+
+      if(tokens.back().at(0) != '!' ){
+	tmp_subscope = tokens.back();		//taking the subscope off
+	if( tokens.size() > 1 ){
+		tokens.pop_back();
+		if( tokens.back().at(0) != '!' ){
+			tmp_scope = tmp_subscope;
+			tmp_subscope = "";
+		}
+	} else {
+		tmp_scope = tmp_subscope;
+		tmp_subscope = "";
+	}
+      }
+
+      if(tmp_did == "" && tokens.back().at(0) == '!'){
+		tmp_did = tokens.back();
+		tmp_did.erase(0,1);
+		if( tmp_scope == "" ){
+			std::string tmp_re = tokens.back();
+			tokens.pop_back();
+			tmp_scope = tokens.back();
+			tokens.push_back(tmp_re);
+		}
+      }
+
+      if(tmp_scope == ""){
+		while(tokens.back().at(0) == '!'){
+			tokens.pop_back();
+		}
+		tmp_scope = tokens.back();
+      }
+
+      if( tmp_did != ""){
+		did_t tmp_status;
+		tmp_status = rc->get_did_status(tmp_scope, tmp_did);
+		if(tmp_status.type == "FILE"){
+			std::cerr << "ERROR: Driectory to open is of FILE type." << std::endl;
+			return did_r;
+		} else if( tmp_status.type != "DATASET" && tmp_status.type != "CONTAINER" ){
+			std::cerr << "ERROR: Unknown did type." << std::endl;
+		  }
+      }
+
+      if(tmp_did != ""){
+		tokens.push_back("!" + tmp_did);
+      }
+
+      if ((tmp_scope == ".") && (tmp_did == ".")) {
+        return did_r;
+      }
+
+      std::deque<did_t> tmp_r;
+      tmp_r = rc->list_dids(tmp_scope, tmp_did);
+
+      std::string tmp_scope_compare;
+      if( tmp_subscope == "" ){
+		tmp_scope_compare = tmp_scope;
+      } else {
+		tmp_scope_compare = tmp_subscope;
+      }
+
+      for (uint i = 0; i < tmp_r.size(); ++i) { //Checking if current scope is the same as the scope of the listed dids
+	std::string tmp_str = tmp_r.at(i).scope;
+	if( tmp_str.substr(0,1) == "/" ){
+		tmp_str.erase(0,1);
+        }
+
+	if( tmp_scope_compare == tmp_str ){
+		did_r->scopes.push_back(tmp_r.at(i).scope );
+		did_r->dids.push_back(tmp_r.at(i).name);
+		did_r->types.push_back(tmp_r.at(i).type);
+		did_r->RSE.push_back(tmp_r.at(i).RSE);
+	} else if (tmp_subscope == ""){						//Don't do this if you're allready in a subcategory
+		bool SubScopeExists = FALSE;					//Check if it is not allready there
+		for( uint jj =0 ; jj < did_r->scopes.size() && SubScopeExists == FALSE; jj++){
+			if( did_r->scopes.at(jj) == ( tmp_str ) ){
+				SubScopeExists = TRUE;
+			}
+		}
+		if( SubScopeExists == FALSE ){
+			did_r->scopes.push_back( tmp_str );
+			did_r->dids.push_back("");
+			did_r->types.push_back("");
+			did_r->RSE.push_back("");
 		}
 	}
-	else {
-		if (cwd.size() == 1 || cwd.size()==0) {
-			tmp_r = rc->list_dids(tmp_scope, std::string());
-		} else {
-			tmp_r = rc->list_dids(tmp_scope, tmp_did);
-		}
-	}
-    for (uint i = 0; i < tmp_r.size(); ++i) {
-      // std::cerr << tmp_r.at(i).scope << tmp_r.at(i).name << tmp_r.at(i).type << std::endl;
-      did_r->scopes.push_back(tmp_r.at(i).scope );
-      did_r->dids.push_back(tmp_r.at(i).name);
-      did_r->types.push_back(tmp_r.at(i).type);
-      did_r->RSE.push_back(tmp_r.at(i).RSE);
+      }
     }
   }
 
+  if(tokens.size()>0){
+	if( realscope == FALSE){
+		tokens.pop_front();
+	}
+	for(uint i = 0; i< tokens.size() ; i++){
+		if(tokens.at(i).at(0) == '!'){
+			tokens.at(i).erase(0,1);
+		}
+	}
+	cwd=tokens;
+  }
   return did_r;
 }
 
@@ -347,7 +620,9 @@ dmlite::ExtendedStat *RucioCatalog::readDirx(dmlite::Directory *dir) throw (dmli
     return NULL;
   }
 
-  //std::cerr << did_r->scopes.at(did_r->ptr) << std::endl;
+  std::cerr << did_r->scopes.at(did_r->ptr) << std::endl;
+  std::cerr << did_r->dids.at(did_r->ptr)<< std::endl;
+  std::cerr << did_r->types.at(did_r->ptr)<< std::endl;
 
   if (did_r->path == "/") {
     did_r->stat.name = did_r->scopes.at(did_r->ptr);
@@ -362,18 +637,14 @@ dmlite::ExtendedStat *RucioCatalog::readDirx(dmlite::Directory *dir) throw (dmli
 		std::cerr << "ERROR: " << did_r->dids.at(did_r->ptr) << " DID without type" <<std::endl;
 	} else {
 	  if (did_r->types.at(did_r->ptr) == "CONTAINER" || did_r->types.at(did_r->ptr) == "DATASET" ){
-		did_r->stat.name = did_r->scopes.at(did_r->ptr) ;
-	  } else {
+		did_r->stat.name = did_r->scopes.at(did_r->ptr) + "-" + did_r->dids.at(did_r->ptr);
+	} else {
 	    if (did_r->types.at(did_r->ptr) == "FILE" ){
-		did_r->stat.name = did_r->scopes.at(did_r->ptr);
+		did_r->stat.name =  did_r->scopes.at(did_r->ptr) + "-" + did_r->dids.at(did_r->ptr);
 		did_r->stat.stat.st_mode = S_IFREG;
 	    } else {
-	      if(did_r->types.at(did_r->ptr) == "RSE") {
-		did_r->stat.name = did_r->scopes.at(did_r->ptr);
-              } else {
 		std::cerr << "ERROR: Unknown DID-type" << std::endl;
 		did_r->stat.name = did_r->scopes.at(did_r->ptr);
-	      }
 	    }
 	  }
         }
@@ -508,6 +779,17 @@ std::string RucioCatalog::__sanitizePath(std::string path) {
   return tmp_path;
 }
 
+std::string RucioCatalog::__seperatePath(std::string path){
+	std::string tmp_path = path;
+	for( uint i = 0; i<tmp_path.size() ; i++){
+		if(tmp_path.at(i)== '-'){
+			tmp_path.at(i)='!';
+			tmp_path.insert(i, "/");
+		}
+	}
+	return tmp_path;
+}
+
 std::deque<std::string> RucioCatalog::__splitPath(std::string path) {
   std::deque<std::string> tmp_split;
 
@@ -527,4 +809,11 @@ std::deque<std::string> RucioCatalog::__splitPath(std::string path) {
 
   return tmp_split;
 }
+}
+
+std::string UpToLow(std::string str) {
+    for (int i=0;i<strlen(str.c_str());i++)
+        if (str[i] >= 0x41 && str[i] <= 0x5A)
+            str[i] = str[i] + 0x20;
+    return str;
 }

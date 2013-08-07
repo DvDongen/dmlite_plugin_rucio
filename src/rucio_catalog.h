@@ -33,7 +33,7 @@ class RucioDID : public dmlite::Directory {
     std::deque<std::string> scopes;
     std::deque<std::string> dids;
     std::deque<std::string> types;
-	std::deque<std::string> RSE;
+    std::deque<std::string> RSE;
     long ptr;
     dmlite::ExtendedStat stat;
 };
@@ -81,11 +81,14 @@ class RucioCatalog : public dmlite::DummyCatalog {
   private:
     std::deque<std::string> __splitPath(std::string path);
     std::string __sanitizePath(std::string path);
+    std::string __seperatePath(std::string path);
     void __debugPrintPath();
 
     RucioConnect *rc;
     std::deque<std::string> cwd;
 };
 }
+
+std::string UpToLow(std::string str);
 
 #endif

@@ -25,6 +25,9 @@ typedef struct {
 } mem_t;
 size_t write_fp(void *ptr, size_t size, size_t nmemb, void *stream);
 
+void clean_json_stream(mem_t *mem);
+std::deque<std::string> get_json_rsekeys(std::string json);
+
 namespace Rucio {
 
 typedef struct {
@@ -35,7 +38,7 @@ typedef struct {
 } did_t;
 
 typedef struct  {
-  std::string rse;
+  std::string RSE;
   std::string pfn;
   std::string checksum;
   int size;
