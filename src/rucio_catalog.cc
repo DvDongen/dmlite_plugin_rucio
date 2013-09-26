@@ -6,7 +6,7 @@
  *
  * Authors:
  * - Mario Lassnig, <mario.lassnig@cern.ch>, 2012
- * - Daan van Dongen, <Daanvandongen@gmail.com>, 2013
+ * - Daan van Dongen, <Daanvdongen@gmail.com>, 2013
  */
 
 #include <deque>
@@ -73,6 +73,18 @@ void RucioCatalog::changeDir(const std::string& path) throw (dmlite::DmException
 
   std::string tmp_path = __sanitizePath(path);
   std::cerr << tmp_path << std::endl;
+  //Count and remove the '.++'
+  int amount=0;
+  while(tmp_path.size()>5 && tmp_path.substr(tmp_path.size()-4,4)=="/.++"){
+	amount++;
+	tmp_path.erase(tmp_path.size()-4,4);
+  }
+
+  for(int i=0; tmp_path.size()>4 && i<tmp_path.size()-4 ; i++){
+	if(tmp_path.substr(i,4)=="/.++"){
+		tmp_path.erase(i,4);
+	}
+  }
   tmp_path = __seperatePath(tmp_path);
 
   if (tmp_path == "~") { // Home is root
@@ -109,17 +121,31 @@ void RucioCatalog::changeDir(const std::string& path) throw (dmlite::DmException
   std::string tmp_scope;
   std::string tmp_did;
 
+  std::deque<std::string> list_str;
+  list_str.push_back("user");
+  list_str.push_back("group");
+  list_str.push_back("scope");
+
   char* tmp_ch = new char(1);
 
   if (cwd.empty()) {
     return;
   } else if (cwd.size() == 1) {					//Checking if it is a real scope
     bool realscope = TRUE;
-    if( cwd.back() == "user"){
-	realscope = FALSE;
+    for( int j=0; j<list_str.size() ;j++){
+	if( cwd.back() == list_str.at(j)){
+		realscope = FALSE;
+		break;
+	    }
     }
-    for (uint i = 0; i < 26 && realscope == TRUE; ++i) {
+    for (uint i = 0; i < 26 && realscope == TRUE; ++i) {	//Checking if it is a letter
 	tmp_ch[0] = (char) (97+i);
+	if( cwd.back() == (std::string) tmp_ch){
+		realscope = FALSE;
+	}
+    }
+    for (uint i = 0; i < 10 && realscope == TRUE; ++i) {	//Checking if it is a number
+	tmp_ch[0] = (char) (48+i);
 	if( cwd.back() == (std::string) tmp_ch){
 		realscope = FALSE;
 	}
@@ -214,6 +240,12 @@ void RucioCatalog::changeDir(const std::string& path) throw (dmlite::DmException
 		}
 	}
   }
+  while(amount>0){		//put the '++' back
+	amount--;
+	std::string tmp_back = cwd.back();
+	cwd.pop_back();
+	cwd.push_back(tmp_back+"/.++");
+  }
 }
 
 void RucioCatalog::closeDir(dmlite::Directory *dir) throw (dmlite::DmException) {
@@ -244,10 +276,26 @@ dmlite::ExtendedStat RucioCatalog::extendedStat(const std::string& path, bool fo
 
   std::string tmp_path = __sanitizePath(path);
   std::cerr << tmp_path << std::endl;
+  //Count and remove the '.++'
+  int amount=0;
+  while(tmp_path.size()>5 && tmp_path.substr(tmp_path.size()-4,4)=="/.++"){
+	amount++;
+	tmp_path.erase(tmp_path.size()-4,4);
+  }
+  for(int i=0; tmp_path.size()>4 && i<tmp_path.size()-4 ; i++){
+	if(tmp_path.substr(i,4)=="/.++"){
+		tmp_path.erase(i,4);
+	}
+  }
   tmp_path = __seperatePath(tmp_path);
 
   if (tmp_path == "/") {
     stat_e.name = "/";
+    while(amount>0){		//put the '++' back
+	amount--;
+std::cerr << "we do do this" << std::endl;
+	stat_e.name.append("/.++");
+    }
     stat_e.stat.st_mode = S_IFDIR;
     return stat_e;
   }
@@ -267,7 +315,6 @@ dmlite::ExtendedStat RucioCatalog::extendedStat(const std::string& path, bool fo
 
   std::string tmp_file = "";
   std::string tmp_scope = "";
-
   if(path.at(0) != '/'){	//pushing the cwd in the front of the path
       for( int i=0 ; i< (int)(cwd.size())-1 ; i++){
 		tokens.push_front(cwd.at(cwd.size()-2-i));
@@ -284,6 +331,10 @@ dmlite::ExtendedStat RucioCatalog::extendedStat(const std::string& path, bool fo
 		if(tmp_status.type == "FILE"){
 			stat_e.stat.st_mode = S_IFREG;
 			stat_e.name = tmp_file;
+			while(amount>0){		//put the '++' back
+				amount--;
+				stat_e.name.append("/.++");
+			}
 			std::deque<replica_t> tmp_deq_r;
 			tmp_deq_r = rc->list_replicas(tmp_scope, tmp_file);
 			if( tmp_deq_r.size() > 0){
@@ -295,7 +346,6 @@ dmlite::ExtendedStat RucioCatalog::extendedStat(const std::string& path, bool fo
   if(stat_e.stat.st_mode != S_IFREG){
 	stat_e.stat.st_mode = S_IFDIR;
   }
-
   return stat_e;
 }
 
@@ -315,6 +365,11 @@ std::vector<dmlite::Replica> RucioCatalog::getReplicas(const std::string& path) 
   std::cerr << "[RUCIO][CATALOG][GETREPLICAS]" << std::endl;
   std::string tmp_path = __sanitizePath(path);
   std::cerr << tmp_path << std::endl;
+  for(int i=0; tmp_path.size()>4 && i<tmp_path.size()-4 ; i++){
+	if(tmp_path.substr(i,4)=="/.++"){
+		tmp_path.erase(i,4);
+	}
+  }
   tmp_path = __seperatePath(tmp_path);
 
   std::deque<std::string> tokens;
@@ -351,8 +406,8 @@ std::vector<dmlite::Replica> RucioCatalog::getReplicas(const std::string& path) 
   tmp_deq_r = rc->list_replicas(tmp_scope, tmp_file);
   for( int i=0 ; i<tmp_deq_r.size() ; i++){
 	dmlite::Replica replica;
-	replica.server	= "ThisIsAServername";
-	replica.rfn	= "--" + tmp_deq_r.at(i).RSE + "--" ;
+	replica.server	= "ThisIsAServername";			//metalink entry
+	replica.rfn	= "--" + tmp_deq_r.at(i).RSE + "--" ;	//metalink entry
 	tmp_repl.push_back(replica);
   }
   return tmp_repl;
@@ -380,12 +435,42 @@ dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite:
 
   std::string tmp_path = __sanitizePath(path);
   std::cerr << tmp_path << std::endl;
+
+  uint did_r_per = 50;
+  //Count and remove the '.++'
+  int amount=0;
+  while(tmp_path.size()>3 && tmp_path.substr(tmp_path.size()-4,4)=="/.++"){
+	amount++;
+	tmp_path.erase(tmp_path.size()-4,4);
+  }
+
+  uint did_r_start=did_r_per*amount;
+  /*for( uint i = 0; i<tmp_path.size()-1 ; i++){
+	if(tmp_path.at(i)== '-' && tmp_path.at(i+1)!='-'){
+		std::string tmp_strint = tmp_path.substr(i+1, tmp_path.npos-i-1);
+		tmp_path.erase(i-1, tmp_path.npos-i+1);
+		did_r_start += std::strtoul(tmp_strint.c_str(),NULL,10);
+		break;
+	}
+  }*/
+  for(int i=0; tmp_path.size()>4 && i<tmp_path.size()-4 ; i++){
+	if(tmp_path.substr(i,4)=="/.++"){
+		tmp_path.erase(i,4);
+	}
+  }
   tmp_path = __seperatePath(tmp_path);
 
   RucioDID *did_r = new RucioDID(tmp_path);
 
+  std::cerr << tmp_path << std::endl;
+
   std::deque<std::string> tokens;		//tokens = your path
   bool realscope= TRUE;
+
+  std::deque<std::string> list_str;
+  list_str.push_back("user");
+  list_str.push_back("group");
+  list_str.push_back("scope");
 
   did_r->scopes.push_back(".");
   did_r->scopes.push_back("..");
@@ -401,14 +486,23 @@ dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite:
    */
 
   if (tmp_path == "/") {
-    did_r->scopes.push_back( "user" );
-    did_r->dids.push_back(std::string());
-    did_r->types.push_back(std::string());
-    did_r->RSE.push_back(std::string());
+    for( int j=0; j<list_str.size() ; j++){
+	did_r->scopes.push_back( list_str.at(j) );
+	did_r->dids.push_back(std::string());
+	did_r->types.push_back(std::string());
+	did_r->RSE.push_back(std::string());
+    }
 
     char* tmp_ch2 = new char(1);
     for (uint i = 0; i < 26; ++i) {	//pushing back every letter
 	tmp_ch2[0] = (char) (97+i);
+	did_r->scopes.push_back( (std::string) tmp_ch2 );
+	did_r->dids.push_back(std::string());
+	did_r->types.push_back(std::string());
+	did_r->RSE.push_back(std::string());
+    }
+    for (uint i = 0; i < 10; ++i) {	//pushing back every number
+	tmp_ch2[0] = (char) (48+i);
 	did_r->scopes.push_back( (std::string) tmp_ch2 );
 	did_r->dids.push_back(std::string());
 	did_r->types.push_back(std::string());
@@ -441,9 +535,12 @@ dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite:
     std::string tmp_str = "";
     realscope = TRUE;
     if (tokens.size() == 1) {
-        if( tokens.back() == "user"){
-		tmp_str = "user";
-		realscope = FALSE;
+	for( int j=0; j<list_str.size();j++){
+	        if( tokens.back() == list_str.at(j)){
+			tmp_str = list_str.at(j);
+			realscope = FALSE;
+			break;
+		}
 	}
 	for (uint i = 0; i < 26 && realscope == TRUE; ++i) {
 		tmp_str = (char) (97+i);
@@ -452,47 +549,94 @@ dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite:
 			tmp_str = tmp_str;
 		}
 	}
+	for (uint i = 0; i < 10 && realscope == TRUE; ++i) {
+		tmp_str = (char) (48+i);
+		if( tokens.back() == tmp_str){
+			realscope =FALSE;
+			tmp_str = tmp_str;
+		}
+	}
     }
+
+    uint did_r_max;
+    if(did_r_start==0 && amount==0){
+	//did_r_max= did_r_per;
+	did_r_max=0-1;
+    } else {
+	did_r_max = did_r_start;
+	did_r_start = did_r_start-did_r_per;
+    }
+    uint did_r_count=0;		//Does not count subscopes!
 
     if(realscope == FALSE ) {
     /**
      * The listing of scopes based on there starting chars
      */
 	std::deque<std::string> tmp_scopes = rc->list_scopes();
-	if( tmp_str == "user" ){
-		for (uint i = 0; i < tmp_scopes.size(); ++i) {
-			if( UpToLow(tmp_scopes.at(i).substr(0,4)) == "user" ){	//checking if it starts with "user"
-					did_r->scopes.push_back("/" + tmp_scopes.at(i));
-					did_r->dids.push_back(std::string());
-					did_r->types.push_back("SCOPE");
-					did_r->RSE.push_back(std::string());
+
+	bool done = FALSE;
+	for(int j=0; j<list_str.size() && done==FALSE ;j++){
+		if( tmp_str == list_str.at(j)){
+			done = TRUE;
+			for (uint i = 0; i < tmp_scopes.size(); ++i) {
+				if(did_r_count>did_r_max) break;
+				if( UpToLow(tmp_scopes.at(i).substr(0,list_str.at(j).size())) == list_str.at(j) ){	//checking if it starts with "user"
+						did_r_count++;
+						if(did_r_count> did_r_start){
+							did_r->scopes.push_back("/" + tmp_scopes.at(i));
+							did_r->dids.push_back(std::string());
+							did_r->types.push_back("SCOPE");
+							did_r->RSE.push_back(std::string());
+						}
+				}
 			}
 		}
-	} else {
-	  if(tmp_str == "u") {
-		for (uint i = 0; i < tmp_scopes.size(); ++i) {
-			if(UpToLow(tmp_scopes.at(i).substr(0,1)) == "u" && !(UpToLow(tmp_scopes.at(i).substr(0,4)) == "user") ){	//checking if it starts with "u", but not "user"
-					did_r->scopes.push_back("/" + tmp_scopes.at(i));
-					did_r->dids.push_back(std::string());
-					did_r->types.push_back("SCOPE");
-					did_r->RSE.push_back(std::string());
+	}
+	for(int j=0; j<list_str.size() && done==FALSE ;j++){
+		if(list_str.at(j).size()<1) continue;
+		if( tmp_str == list_str.at(j).substr(0,1)){
+			done=TRUE;
+			for (uint i = 0; i < tmp_scopes.size(); ++i) {
+				if(did_r_count>did_r_max) break;
+				if(UpToLow(tmp_scopes.at(i).substr(0,1)) == list_str.at(j).substr(0,1) && !(UpToLow(tmp_scopes.at(i).substr(0,list_str.at(j).size())) == list_str.at(j)) ){	//checking if it starts with "u", but not "user"
+					did_r_count++;
+					if(did_r_count> did_r_start){
+						did_r->scopes.push_back("/" + tmp_scopes.at(i));
+						did_r->dids.push_back(std::string());
+						did_r->types.push_back("SCOPE");
+						did_r->RSE.push_back(std::string());
+					}
+				}
 			}
 		}
-	  } else {
+	}
+	if(done == FALSE){
 		for (uint i = 0; i < tmp_scopes.size(); ++i) {
+			if(did_r_count>did_r_max) break;
 			if( UpToLow(tmp_scopes.at(i).substr(0,1)) == tmp_str){
-				did_r->scopes.push_back("/" + tmp_scopes.at(i));
-				did_r->dids.push_back(std::string());
-				did_r->types.push_back("SCOPE");
-				did_r->RSE.push_back(std::string());
+				did_r_count++;
+				if(did_r_count> did_r_start){
+					did_r->scopes.push_front("/" + tmp_scopes.at(i));
+					did_r->dids.push_front(std::string());
+					did_r->types.push_front("SCOPE");
+					did_r->RSE.push_front(std::string());
+				}
 			}
 		}
-	    }
-	  }
-    } else {
+	}
+
+	if(did_r_max <= did_r->scopes.size() || did_r_max-did_r_start > did_r_per){
+		did_r->scopes.push_front(".++");
+		did_r->dids.push_front(std::string());
+		did_r->types.push_front("SCOPE");
+		did_r->RSE.push_front(std::string());
+	}
+    } else {			//If realscope==TRUE
     /**
      * Everything else is a combination of scope, DID, or both. So split it up and let's see what we've got.
      */
+
+
 
       /**
        * Just look at the last two entries.
@@ -555,6 +699,12 @@ dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite:
       std::deque<did_t> tmp_r;
       tmp_r = rc->list_dids(tmp_scope, tmp_did);
 
+      if(did_r_max <= tmp_r.size() || did_r_max-did_r_start > did_r_per){
+		did_r->scopes.push_back(".++");
+		did_r->dids.push_back(std::string());
+		did_r->types.push_back("SCOPE");
+		did_r->RSE.push_back(std::string());
+      }
       std::string tmp_scope_compare;
       if( tmp_subscope == "" ){
 		tmp_scope_compare = tmp_scope;
@@ -563,16 +713,20 @@ dmlite::Directory *RucioCatalog::openDir(const std::string& path) throw (dmlite:
       }
 
       for (uint i = 0; i < tmp_r.size(); ++i) { //Checking if current scope is the same as the scope of the listed dids
+	if(did_r_count>did_r_max) break;
 	std::string tmp_str = tmp_r.at(i).scope;
 	if( tmp_str.substr(0,1) == "/" ){
 		tmp_str.erase(0,1);
         }
 
 	if( tmp_scope_compare == tmp_str ){
-		did_r->scopes.push_back(tmp_r.at(i).scope );
-		did_r->dids.push_back(tmp_r.at(i).name);
-		did_r->types.push_back(tmp_r.at(i).type);
-		did_r->RSE.push_back(tmp_r.at(i).RSE);
+		did_r_count++;
+		if(did_r_count> did_r_start){
+			did_r->scopes.push_back(tmp_r.at(i).scope );
+			did_r->dids.push_back(tmp_r.at(i).name);
+			did_r->types.push_back(tmp_r.at(i).type);
+			did_r->RSE.push_back(tmp_r.at(i).RSE);
+		}
 	} else if (tmp_subscope == ""){						//Don't do this if you're allready in a subcategory
 		bool SubScopeExists = FALSE;					//Check if it is not allready there
 		for( uint jj =0 ; jj < did_r->scopes.size() && SubScopeExists == FALSE; jj++){
@@ -620,9 +774,11 @@ dmlite::ExtendedStat *RucioCatalog::readDirx(dmlite::Directory *dir) throw (dmli
     return NULL;
   }
 
-  std::cerr << did_r->scopes.at(did_r->ptr) << std::endl;
-  std::cerr << did_r->dids.at(did_r->ptr)<< std::endl;
-  std::cerr << did_r->types.at(did_r->ptr)<< std::endl;
+  if( did_r->dids.at(did_r->ptr) != ""){
+	std::cerr << did_r->dids.at(did_r->ptr)<< std::endl;
+  } else {
+	std::cerr << did_r->scopes.at(did_r->ptr)<< std::endl;
+  }
 
   if (did_r->path == "/") {
     did_r->stat.name = did_r->scopes.at(did_r->ptr);
@@ -637,10 +793,10 @@ dmlite::ExtendedStat *RucioCatalog::readDirx(dmlite::Directory *dir) throw (dmli
 		std::cerr << "ERROR: " << did_r->dids.at(did_r->ptr) << " DID without type" <<std::endl;
 	} else {
 	  if (did_r->types.at(did_r->ptr) == "CONTAINER" || did_r->types.at(did_r->ptr) == "DATASET" ){
-		did_r->stat.name = did_r->scopes.at(did_r->ptr) + "-" + did_r->dids.at(did_r->ptr);
+		did_r->stat.name = did_r->scopes.at(did_r->ptr) + "--" + did_r->dids.at(did_r->ptr);
 	} else {
 	    if (did_r->types.at(did_r->ptr) == "FILE" ){
-		did_r->stat.name =  did_r->scopes.at(did_r->ptr) + "-" + did_r->dids.at(did_r->ptr);
+		did_r->stat.name =  did_r->scopes.at(did_r->ptr) + "--" + did_r->dids.at(did_r->ptr);
 		did_r->stat.stat.st_mode = S_IFREG;
 	    } else {
 		std::cerr << "ERROR: Unknown DID-type" << std::endl;
@@ -781,10 +937,12 @@ std::string RucioCatalog::__sanitizePath(std::string path) {
 
 std::string RucioCatalog::__seperatePath(std::string path){
 	std::string tmp_path = path;
-	for( uint i = 0; i<tmp_path.size() ; i++){
-		if(tmp_path.at(i)== '-'){
-			tmp_path.at(i)='!';
-			tmp_path.insert(i, "/");
+	if( tmp_path.size()>2){
+		for( uint i = 0; i<tmp_path.size()-2 ; i++){
+			if(tmp_path.substr(i,2)== "--"){
+				tmp_path.at(i)='/';
+				tmp_path.at(i+1)='!';
+			}
 		}
 	}
 	return tmp_path;
@@ -816,4 +974,33 @@ std::string UpToLow(std::string str) {
         if (str[i] >= 0x41 && str[i] <= 0x5A)
             str[i] = str[i] + 0x20;
     return str;
+}
+
+std::string to_string(int number){
+    std::string number_string = "";
+    char ones_char;
+    int ones = 0;
+    while(true){
+        ones = number % 10;
+        switch(ones){
+            case 0: ones_char = '0'; break;
+            case 1: ones_char = '1'; break;
+            case 2: ones_char = '2'; break;
+            case 3: ones_char = '3'; break;
+            case 4: ones_char = '4'; break;
+            case 5: ones_char = '5'; break;
+            case 6: ones_char = '6'; break;
+            case 7: ones_char = '7'; break;
+            case 8: ones_char = '8'; break;
+            case 9: ones_char = '9'; break;
+            default : ;
+        }
+        number -= ones;
+        number_string = ones_char + number_string;
+        if(number == 0){
+            break;
+        }
+        number = number/10;
+    }
+    return number_string;
 }

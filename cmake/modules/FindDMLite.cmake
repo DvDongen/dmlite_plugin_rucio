@@ -13,7 +13,7 @@
 # -----------------------------------------------------
 find_library(DMLITE_LIBRARIES
     NAMES dmlite
-    HINTS ${DMLITE_LOCATION}/lib ${DMLITE_LOCATION}/lib64 ${DMLITE_LOCATION}/lib32
+    HINTS /opt/dmlite/usr/lib64
     DOC "The main dmlite library"
 )
 if(DMLITE_LIBRARIES)
@@ -25,7 +25,7 @@ endif()
 # -----------------------------------------------------
 find_path(DMLITE_INCLUDE_DIR
     NAMES dmlite/c/dmlite.h dmlite/cpp/dmlite++.h
-    HINTS ${DMLITE_LOCATION} ${DMLITE_LOCATION}/include ${DMLITE_LOCATION}/include/*
+    HINTS /opt/dmlite/usr /opt/dmlite/usr/include /opt/dmlite/include/*
     DOC "The dmlite include directory"
 )
 if(DMLITE_INCLUDE_DIR)

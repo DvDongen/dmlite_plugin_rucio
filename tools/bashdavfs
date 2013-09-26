@@ -1,0 +1,400 @@
+# Copyright European Organization for Nuclear Research (CERN)
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+#
+# Authors:
+# - Daan van Dongen, <Daanvdongen@gmail.com>, 2013
+
+
+#Standard bashscript
+standardbashenv=~/.bashrc
+
+#Default host for mount.davfs
+standardmounthost=http://localhost
+#Default directory for mount.davfs
+standardmountdir=~/.davfs
+#Default directory to copy to
+standardcopydir=
+#Mount and Unmount automatically upop sourcing this file (Yes/No)
+automount=No
+
+#################################
+
+if [ -z "$copydir" ]; then
+	copydir=$standardcopydir
+fi
+if [ -z "$mounthost" ]; then
+	mounthost=$standardmounthost
+fi
+if [ -z "$mountdir" ]; then
+	mountdir=$standardmountdir
+fi
+
+#help
+#usage: help
+help(){
+	if [ "$1" == "--help" ]; then
+		echo "usage: help"
+	else
+		echo ""
+		echo "List of possible commands:"
+		echo ""
+		echo " addcompletion"
+		echo " cpmeta"
+		echo " gotodavfs"
+		echo " help"
+		echo " ls"
+		echo " mmount"
+		echo " setmount"
+		echo " setcp"
+		echo " setcwd"
+		echo " unsource"
+		echo " uummount"
+		echo " ++"
+		echo " __"
+		echo ""
+	fi
+}
+
+#goto davfs
+#usage: gotodavfs
+gotodavfs(){
+	if [ "$1" == "--help" ]; then
+		echo "usage: gotodavfs"
+	else
+		cd $mountdir
+	fi
+}
+#reset
+#usage: Reset
+__reset() {
+	cd ~
+	if [ "$automount" = "Yes" ]; then
+		uummount
+	fi
+	shopt -u no_empty_cmd_completion
+	complete -r
+	alias '++'=''
+	unalias '++'
+	alias '__'=''
+	unalias '__'
+	alias ls=''
+	unalias ls
+	alias cp=''
+	unalias cp
+	#bind 'set disable-completion off'
+	#bind 'set mark-directories on'
+	#bind 'set match-hidden-files on'
+	#bind 'set page-completions on'
+	#bind 'set show-all-if-ambiguous off'
+	setcwd on
+	unset gotodavfs
+	#unset __reset
+	unset unsource
+	unset setcwd
+	unset setcp
+	unset setmount
+	unset setmmount
+	unset __cp
+	unset mmount
+	#unset uummount
+	#unset ummount
+	#unset uumount
+	unset __cd
+	source $standardbashenv
+	echo "davfs-environment turned off"
+}
+#unsource
+#usage: unsource
+unsource() {
+	if [ "$1" == "--help" ]; then
+		echo "usage: unsource"
+	else
+		__reset
+	fi
+}
+#What to display in PS1
+#usage: setcwd 'on'/'off'
+setcwd() {
+	if [ "$1" == "--help" ]; then
+		echo "usage: setcwd 'on'/'off'"
+	else
+		if [ "$1" = "on" ]; then
+			if [ "$color_prompt" = "yes" ]; then
+				PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+			else
+				PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
+			fi
+		elif [ "$1" = "off" ]; then
+			PS1='\$\$davfs\$\$: '
+		else
+			echo "usage: setcwd 'on'/'off'"
+		fi
+	fi
+}
+# 'setcp' set deault directory to copy to
+#usage: setcp 'directory'
+setcp() {
+	if [ "$1" == "--help" ]; then
+		echo "set deault directory to copy to"
+		echo "usage: setcp 'directory'"
+	else
+		if [ -n "$1" ]; then
+			copydir=$1
+		else
+			echo "usage: setcp 'directory'"
+		fi
+	fi
+}
+# 'setmmount' set deault host and default directory
+#usage: setmmount 'host' 'directory'
+setmount() {
+	if [ "$1" == "--help" ]; then
+		echo "set deault host and default directory"
+		echo "usage: setmount 'host' 'directory'"
+	else
+		if [ -n "$1" ]; then
+			if [ -n "$2" ]; then
+				mounthost=$1
+				mountdir=$2
+			else
+				echo "usage: setmount 'host' 'directory'"
+			fi
+		fi
+	fi
+}
+#setmount
+#usage: setmmount 'where-to-mount directory' 'what-to-mount host'
+setmmount() {
+	setmount $1 $2
+}
+#'__cp' recursive copy
+#usage: cp 'read destination'/'reference' 'copy destination'
+cpmeta() {
+	if [ "$1" == "--help" ]; then
+		echo "usage: cpmeta 'copy-from-destination'/'reference' 'copy-to-destination'"
+	elif [ "$1" == "-r" ]; then
+		echo "use cpmeta without -r on a directory to copy its contents"
+	else
+		local U1=""
+		local U2=""
+		local U3=""
+		U1=$1
+		if [ -z "$2" ]; then
+			U2=$copydir
+		else
+			U2=$2
+		fi
+		if [ -n "$U1" ]
+		then
+		if [ -z "$U3" ]; then
+			if [ -e "$U1" ]; then
+				DO=$NOTHING
+			else
+				U3=${U1##*/}
+				U1=${U1%/*}
+			fi
+		fi
+		if [ "$U1" == "." ]; then
+			U2=$U2/${PWD##*/}
+			U1="."
+		fi
+		if [ "$U1" == "./" ]; then
+			U2=$U2/${PWD##*/}
+			U1="."
+		fi
+		if [ -n "$U2" ]
+		then
+			if [ -d $U1 ]
+			then
+				#mkdir $U2/$U1
+				for all in $(find $U1/* ! -name '.*')
+				do
+					if [ -n "$U3" ]; then
+						#all=${all##*./}
+						__cp $all/$U3 $U2
+					else
+						__cp $all $U2
+					fi
+					#rsync $all ~/CopyHere/$1/
+				done
+			else
+				if [ -n "$U3" ]; then
+					if [[ "$U1" == *"$U3"* ]]; then
+						echo ''
+						mkdir -p $U2/$U1
+						cat -v $U1 >/dev/null 2>&1
+						rsync -R -v $U1 $U2/
+					fi
+				else
+					echo ''
+					mkdir -p $U2/$U1
+					cat -v $U1 >/dev/null 2>&1
+					rsync -R -v $U1 $U2/
+				fi
+			fi
+		fi
+		fi
+	fi
+}
+
+#mount without arguments
+#usage	: mmount 'where-to-mount directory' 'what-to-mount host'
+#or	: mmount
+mmount() {
+	local bool="1"
+	if [ "$1" == "--help" ]; then
+		echo "usage	: mmount 'where-to-mount directory' 'what-to-mount host'"
+		echo "or	: mmount"
+	else
+		if [ -n "$1" ]; then
+			if [ -n "$2" ]; then
+				mountdir=$1
+				mounthost=$2
+			else
+				bool="0"
+			fi
+		fi
+		if [ "$bool" == "1" ]; then
+			sudo mount.davfs $mounthost $mountdir
+		else
+			echo "usage	: mmount 'where-to-mount directory' 'what-to-mount host'"
+			echo "or	: mmount"
+		fi
+	fi
+}
+#umount without arguments
+#usage: uummount
+uummount() {
+	if [ "$1" == "--help" ]; then
+		echo "usage	: uummount"
+	else
+		sudo umount $mountdir
+	fi
+}
+#umount without arguments
+ummount() {
+	uummount $1
+}
+uumount() {
+	uummount $1
+}
+
+#Autocompletefunction (for cd)
+__cd() {
+	local files
+	local filez1=($(ls -U | grep "^$2"))
+	local ii
+	local ppattern
+	local tmp1
+	local old1
+	local new1
+	#ii=0
+	#for all in ${filez1[@]}			#NOT listing only directories
+	#do
+		#if [ -d $all ]
+		#then
+			#filez2[ii]=$all
+			#ii=$ii+1
+		#fi
+	#done
+	if [ -n "${filez1[0]}" ] && [ -z "${filez1[1]}" ]
+	then
+		files[0]=${filez1[0]}
+	else
+		ppattern="${filez1[0]}"
+		new1="${filez1[0]}"
+		old1="${filez1[0]}"
+		for all in  ${filez1[@]}
+		do
+			tmp1=$all
+			if [[ $tmp1 =~ ${ppattern:0:${#ppattern}} ]]
+			then
+				DO=$NOTHING
+			else
+				for ((i=${#ppattern}-1; i>=0; i--))
+				do
+					if [ i==0 ]
+					then
+						if [[ $tmp1 =~ ${ppattern:0:1} ]]
+						then
+							DO=$NOTHING
+						else
+							ppattern=""
+							break
+						fi
+					fi
+					if [[ $tmp1 =~ ${ppattern:0:i} ]]
+					then
+						old1=$new1
+						new1=$tmp1
+						ppattern=${ppattern:0:i}
+						break
+					fi
+					
+				done
+			fi
+		done
+		if [ "$2" == "$ppattern" ]
+		then
+			for all in ${filez1[@]}
+			do
+				files[ii]=$all
+				(( ii += 1 ))
+			done
+		else
+			files[0]=$old1
+			files[1]=$new1
+		fi
+	fi
+	#[[ -e ${files[0]} ]] && 			#NOT checking existence
+	COMPREPLY=( "${files[@]##*/}" )
+}
+
+#addcompletion
+#addcompletion with add an autocomplete function to the given command
+#usage: addcompletion 'command'
+addcompletion() {
+	if [ "$1" == "--help" ]; then
+		echo "addcompletion with add an autocomplete function to the given command"
+		echo "usage	: addcompletion 'command'"
+	elif [ "$1" == "" ]; then
+		echo "addcompletion with add an autocomplete function to the given command"
+		echo "usage	: addcompletion 'command'"
+	else
+		complete -o nospace -F __cd $1
+	fi
+}
+
+#addcompletion
+addcomplete() {
+	addcompletion $1
+} 
+
+#initialization
+shopt -s no_empty_cmd_completion
+complete -r
+complete -D
+complete -o nospace -F __cd cd
+complete -o nospace -F __cd cp
+complete -o nospace -F __cd cpmeta
+complete -o nospace -F __cd vim
+complete -o nospace -F __cd cat
+complete -o nospace -F __cd setcp
+alias cp=''
+unalias cp
+alias cp='cpmeta'
+alias ls=''
+unalias ls
+alias ls='ls -U'
+alias '++'='if [ -d ".++" ]; then cd .++; if [ $? -eq 0 ]; then ls; fi; fi'
+alias '__'='cd ..'
+PS1='\$\$davfs\$\$: '
+if [ "$automount" = "Yes" ]; then
+	mmount
+	echo ""
+fi
+echo "Environment now set for davfs"
+help

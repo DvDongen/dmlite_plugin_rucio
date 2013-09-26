@@ -6,7 +6,7 @@
  *
  * Authors:
  * - Mario Lassnig, <mario.lassnig@cern.ch>, 2012
- * - Daan van Dongen, <Daanvandongen@gmail.com>, 2013
+ * - Daan van Dongen, <Daanvdongen@gmail.com>, 2013
  */
 
 #include <cstdlib>
@@ -40,11 +40,20 @@ void clean_json_stream(mem_t *mem){ 				//cleans up the JSON stream to correctly
 	bool check1 = TRUE;					//Check if the stream is just one big array
 	int bra_c=0;						//Bracket counter
 
-	bool testbool = FALSE;
+	bool testbool = FALSE;					//this bool is FALSE if it equals teststring
 	std::string teststring= "DataIdentifierNotFound";
-	for( int i=0 ; i<teststring.size() && testbool == FALSE ; i++){
+	for( int i=0 ; i<teststring.size() && testbool == FALSE && i<mem->size ; i++){
 		if(mem->memory[i]!=teststring.at(i) ){
 			testbool= TRUE;
+		}
+	}
+	if( testbool == TRUE){
+		testbool = FALSE;
+		teststring= "None";
+		for( int i=0 ; i<teststring.size() && testbool == FALSE && i<mem->size ; i++){
+			if(mem->memory[i]!=teststring.at(i) ){
+				testbool= TRUE;
+			}
 		}
 	}
 
@@ -69,7 +78,7 @@ void clean_json_stream(mem_t *mem){ 				//cleans up the JSON stream to correctly
 				if( mem->memory[i]=='\n'){
 					mem->memory[i]=',';
 				}
-				if( mem->memory[i]== '}' && i!=mem->size-1){	//Have not encountered these yet. But else this method would fail if you do
+				if( mem->memory[i]== '}' && i!=mem->size-1){	//Have not encountered these yet. But else this method would fail if you do.
 					if( mem->memory[i+1]=='{'){
 						std::cerr << "ERROR: Encountered \"}{\"" << std::endl;
 					}
@@ -105,35 +114,46 @@ void clean_json_stream(mem_t *mem){ 				//cleans up the JSON stream to correctly
 			mem->memory = tmp_c;
 		}
 	}
-	if( mem->size = 0){					//Dealing with empty strings
+	/*if( mem->size == 0 || mem->size == 4){					//Dealing with empty strings
 		char* tmp_cc = new char[2];
 		tmp_cc[0] = '[';
 		tmp_cc[1] = ']';
-		delete[] mem->memory;
+		//delete[] mem->memory;
+		//free(mem->memory);
 		mem-> size = 2;
 		mem->memory = tmp_cc;
-	}
+	}*/
 }
 
 std::deque<std::string> get_json_rsekeys(std::string json){
 	std::deque<std::string> result;
 	std::string tmp = "";
-	int record = -1;
-	for(int i=0 ; i<json.size() ; i++){
-		while( i<json.size()-1 && json.at(i)== '\\'){
-			i++;
-		}
-		if(record ==1 && json.at(i) != '"'){
-			tmp = tmp + json.at(i);
-		}
-		if( json.at(i) == '"'){
-			if(record ==1){
-				result.push_back(tmp);
-				tmp = "";
-			}
-			record = -1*record;
+	bool atleastonce = FALSE;
+	for(int i=0 ;  atleastonce == FALSE && i<json.size();i++){
+		if(json.at(i) == '"'){
+			atleastonce = TRUE;
 		}
 	}
+	if(atleastonce == TRUE){
+		int record = -1;
+		for(int i=0 ; i<json.size() ; i++){
+			while( i<json.size()-1 && json.at(i)== '\\'){
+				i++;
+			}
+			if(record ==1 && json.at(i) != '"'){
+				tmp = tmp + json.at(i);
+			}
+			if( json.at(i) == '"'){
+				if(record ==1){
+					result.push_back(tmp);
+					tmp = "";
+				}
+				record = -1*record;
+			}
+		}
+	} else {
+		result.push_back(json);
+	  }
 	return result;
 }
 
@@ -153,6 +173,7 @@ RucioConnect::RucioConnect(std::string host, std::string port, std::string auth_
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &chunk);
   curl_easy_setopt(curl, CURLOPT_USERAGENT, "plugin_rucio/0.1");
   curl_easy_setopt(curl, CURLOPT_CAINFO, ca_cert.c_str());
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
 
   headers = curl_slist_append(headers, full_auth.c_str());
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -165,18 +186,41 @@ RucioConnect::~RucioConnect() {
 }
 
 json_object *RucioConnect::http_get_url_json(std::string url) {
+  std::cerr << "[CURL] " << url << std::endl;
   json_object *tmp_j = NULL;
   chunk.memory = (char *)malloc(1);
   chunk.size = 0;
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   CURLcode res = curl_easy_perform(curl);
-  if (res != CURLE_OK) {
-	std::cerr << chunk.memory << std::endl;
-	std::cerr << "curl_easy_perform failed: " << curl_easy_strerror(res) << std::endl;
+  bool testbool = FALSE;
+  std::string teststring= "None";
+  for( int i=0 ; i< teststring.size() && testbool == FALSE && i<chunk.size && i<teststring.size() ; i++){
+	if(chunk.memory[i]!=teststring.at(i) ){
+		testbool= TRUE;
+	}
+  }
+  if (res != CURLE_OK || testbool == FALSE) {
+	std::cerr << "curl_easy_perform failed(with certificate): " << curl_easy_strerror(res) << std::endl;
+	free(chunk.memory);
+	chunk.size = 0;
+	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+	res = curl_easy_perform(curl);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, TRUE);
+	testbool = FALSE;
+	teststring= "None";
+	for( int i=0 ; i< teststring.size() && testbool == FALSE && i<chunk.size && i<teststring.size() ; i++){
+		if(chunk.memory[i]!=teststring.at(i) ){
+			testbool= TRUE;
+		}
+	}
+	if (res != CURLE_OK || testbool == FALSE) {
+		std::cerr << "curl_easy_perform failed(without): " << curl_easy_strerror(res) << std::endl;
+	}
   }
 
   clean_json_stream(&chunk);
-  std::cerr << chunk.memory << std::endl;
+  std::cerr << "Chunk: " << chunk.memory << std::endl;
 
   tmp_j = json_tokener_parse(chunk.memory);
   if (!tmp_j) {
@@ -217,7 +261,6 @@ std::deque<did_t> RucioConnect::list_dids(std::string scope, std::string did) {
     json_object_put(tmp_jj);
     response.push_back(tmp_did);
   }
-
   return response;
 }
 
@@ -256,7 +299,11 @@ std::deque<replica_t> RucioConnect::list_replicas(std::string scope, std::string
   if(json_object_array_length(tmp_j) > 0){
 	std::string str_rses =json_object_get_string( json_object_object_get(json_object_array_get_idx(tmp_j, 0) , "rses" ) );
 	std::deque<std::string> deq_rses;
-	deq_rses = get_json_rsekeys(str_rses);
+	if( str_rses != "" ){
+		deq_rses = get_json_rsekeys(str_rses);
+	} else {
+		std::cerr << "ERROR: No rses to report" << std::endl;
+	}
 
 	json_object *tmp_jj = json_object_array_get_idx(tmp_j, 0);
 	tmp_repl.pfn = "";

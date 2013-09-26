@@ -6,7 +6,7 @@
  *
  * Authors:
  * - Mario Lassnig, <mario.lassnig@cern.ch>, 2012
- * - Daan van Dongen, <Daanvandongen@gmail.com>, 2013
+ * - Daan van Dongen, <Daanvdongen@gmail.com>, 2013
  */
 
 #include <fstream>
@@ -51,7 +51,7 @@ RucioFactory::~RucioFactory() {
 }
 
 void RucioFactory::configure(const std::string& key, const std::string& value) throw (dmlite::DmException) {
-  std::cerr << "[RUCIO][FACTORY][CONFIGURE]" << key << " = " << value << std::endl;
+  std::cerr << "[RUCIO][FACTORY][CONFIGURE] " << key << " = " << value << std::endl;
 
   if (key == "RucioAuthHost") {
     this->auth_host = value;

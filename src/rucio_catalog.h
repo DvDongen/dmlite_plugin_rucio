@@ -6,7 +6,7 @@
  *
  * Authors:
  * - Mario Lassnig, <mario.lassnig@cern.ch>, 2012
- * - Daan van Dongen, <Daanvandongen@gmail.com>, 2013
+ * - Daan van Dongen, <Daanvdongen@gmail.com>, 2013
  */
 
 #ifndef RUCIO_CATALOG_H
@@ -90,5 +90,6 @@ class RucioCatalog : public dmlite::DummyCatalog {
 }
 
 std::string UpToLow(std::string str);
+std::string to_string(int number);
 
 #endif

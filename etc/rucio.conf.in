@@ -1,6 +1,10 @@
 # Uncomment to enable the rucio plugin
 #LoadPlugin plugin_rucio /usr/lib@LIB_SUFFIX@/dmlite/plugin_rucio.so
 
+# These lines make sure that davfs interprets files as metalinks
+SetEnvIf User-Agent ^davfs HAVE_davfs
+RequestHeader append Accept "application/metalink+xml" env=HAVE_davfs
+
 # Rucio server hostname (FQAN). Will be accessed via https:443
 RucioHost hostname
 
